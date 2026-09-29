@@ -1,3 +1,9 @@
+# v0.1.13
+## 2026-09-29
+
+1. [](#improved)
+    * Google Drive links on the settings page, such as "folder" in **Last sync**, open in a new tab.
+
 # v0.1.12
 ## 2026-09-29
 

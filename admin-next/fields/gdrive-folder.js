@@ -80,9 +80,27 @@ ${label ? `<label for="f">${esc(label)}</label>` : ''}
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
         this._hint();
         this._load();
+        document.addEventListener('click', this._onDriveLink);
     }
 
-    disconnectedCallback() { clearTimeout(this._timer); }
+    disconnectedCallback() {
+        clearTimeout(this._timer);
+        document.removeEventListener('click', this._onDriveLink);
+    }
+
+    /**
+     * Opens Google Drive links on this settings page (e.g. "folder" in Last sync) in a
+     * new tab. Admin2 sanitizes display fields with DOMPurify's defaults, which drop
+     * target="_blank", so this component, which is on the same page, does it instead.
+     * Plain left-clicks only; Ctrl/Cmd/Shift/middle-clicks keep the browser's behaviour.
+     */
+    _onDriveLink = (e) => {
+        if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+        const a = e.composedPath().find((n) => n instanceof HTMLAnchorElement);
+        if (!a || !/^https:\/\/drive\.google\.com\//.test(a.href)) return;
+        e.preventDefault();
+        window.open(a.href, '_blank', 'noopener');
+    };
 
     async _call(path, retried = false) {
         const headers = { Accept: 'application/json' };

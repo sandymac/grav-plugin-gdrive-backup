@@ -275,8 +275,9 @@ final class Status
      * "[folder](https://drive.google.com/drive/folders/<id>) `<id>`": the word links to
      * the folder and the id stays plain so it copies easily. Only Drive-id characters
      * reach the URL; anything else shows as plain "folder". Pure.
-     * ponytail: same-tab link; Admin2 runs display fields through DOMPurify's defaults,
-     * which strip target="_blank". Ctrl/Cmd-click opens it in a new tab.
+     * Admin2 runs display fields through DOMPurify's defaults, which strip
+     * target="_blank"; the gdrive-folder field on the same page opens Drive links in a
+     * new tab instead (its _onDriveLink handler).
      */
     public static function folderRef(string $id): string
     {
