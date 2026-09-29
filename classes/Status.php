@@ -101,6 +101,33 @@ final class Status
             . ($a[1] !== '' ? ' (`' . preg_replace('/[`\r\n]/', '', $a[1]) . '`)' : ''), $active));
     }
 
+    /**
+     * Whether a backup profile's zip holds user/data/gdrive (the site's Google
+     * refresh token, client secret, service-account key). Same matching as Grav's
+     * Backups::convertExclude() and RecursiveDirectoryFilterIterator: paths are
+     * relative to the profile root, split on newlines (CRLF too), commas or 2+
+     * spaces, slashes trimmed, and a path excludes everything under it. Pure.
+     */
+    public static function includesSignIn(string $root, string $excludePaths): bool
+    {
+        $rel = 'user/data/gdrive';
+        $root = trim(str_replace('user://', 'user/', trim($root)), '/');
+        if ($root !== '') {
+            if ($rel !== $root && !str_starts_with($rel, $root . '/')) {
+                return false; // the profile backs up somewhere else
+            }
+            $rel = ltrim(substr($rel, strlen($root)), '/');
+        }
+        foreach (preg_split('/[\r\n,]+|\s{2,}/', $excludePaths) ?: [] as $p) {
+            $p = trim(trim($p), '/');
+            if ($p !== '' && ($rel === $p || str_starts_with($rel, $p . '/'))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /** data-content@ for the line saying Grav itself makes the backups, and where that's set up. */
     public static function profilesNotice(): string
     {
@@ -121,7 +148,14 @@ final class Status
             default => sprintf('**%d of %d** backup profile%s scheduled: %s.', count($active), $count, count($active) === 1 ? ' is' : 's are', $list),
         };
 
-        return "Grav makes the backups; this plugin uploads them. Set up what's backed up, and when, in {$where}. {$state}";
+        // The scheduled profiles; with none, any of them via Backup now.
+        $names = array_flip(array_column($active, 0));
+        $exposed = array_filter($profiles, static fn (mixed $p): bool => is_array($p) && ($active === [] || isset($names[(string) ($p['name'] ?? '')]))
+            && self::includesSignIn((string) ($p['root'] ?? '/'), (string) ($p['exclude_paths'] ?? '')));
+        $signIn = $exposed === [] ? '' : "\n\n⚠ These backups include this site's Google sign-in (`user/data/gdrive/`), so anyone who can open a backup zip can reach your Google Drive."
+            . " Keep the Drive folder private, or add `/user/data/gdrive` to the profile's **Exclude paths** in {$where} (you'd then reconnect Google after restoring).";
+
+        return "Grav makes the backups; this plugin uploads them. Set up what's backed up, and when, in {$where}. {$state}{$signIn}";
     }
 
     /**
@@ -196,8 +230,16 @@ final class Status
             if ($id !== '') {
                 $file = Sync::file($drive, $id, $configured !== '' ? Sync::CHECK_FIELDS : 'id,name,trashed');
                 $rep = $memory['replacement'];
-                if ($configured !== '' && ($file === null || !empty($file['trashed'])) && $rep !== null && $rep['for'] === $configured) {
-                    $replacement = Sync::file($drive, $rep['id'], 'id,name,trashed');
+                if ($configured !== '' && $rep !== null && $rep['for'] === $configured) { // same lookups as resolveFolder()
+                    if ($file === null || !empty($file['trashed'])) {
+                        $replacement = Sync::file($drive, $rep['id'], 'id,name,trashed');
+                    } else {
+                        try {
+                            $replacement = Sync::leftover($drive, $rep, $configured);
+                        } catch (DriveException) {
+                            // resolveFolder() skips the reminder on a hiccup too
+                        }
+                    }
                 }
                 if ($file !== null && empty($file['trashed']) && (string) ($file['driveId'] ?? '') !== '') {
                     try {

@@ -18,7 +18,7 @@ use RocketTheme\Toolbox\Event\Event;
  */
 class GdriveBackupPlugin extends Plugin
 {
-    public const VERSION = '0.1.8';
+    public const VERSION = '0.1.9';
     public const JOB = 'gdrive-backup-sync';
 
     private static bool $warnedMissing = false;
@@ -41,8 +41,11 @@ class GdriveBackupPlugin extends Plugin
     {
         self::registerAutoload();
         // Admin2 may resolve data-*@ through the API's /data/resolve, which only calls allowlisted providers.
+        // folderHelp gives away only the host name. Status::folderCheck must NOT be listed: /data/resolve
+        // is open to anyone with api.pages.read, so a page editor could read the account's email and the
+        // folder names and spend the site's Google token. The plugin's own blueprint resolves its
+        // data-content@ server-side and doesn't need the allowlist (nor does Setup::consumerNotice).
         \Grav\Common\Data\Blueprint::addAllowedDynamicCallable(Status::class . '::folderHelp');
-        \Grav\Common\Data\Blueprint::addAllowedDynamicCallable(Status::class . '::folderCheck');
     }
 
     /** Idempotent spl fallback so a git clone into user/plugins works without Composer. */
@@ -127,7 +130,7 @@ class GdriveBackupPlugin extends Plugin
                     $local[(string) $b->filename] = (string) $b->path;
                 }
                 $result = (new Sync($drive, $status['folder_id'], $site, max(1, (int) ($config['keep'] ?? 10)), (array) ($config['generational'] ?? [])))->run($local);
-                $status = [...$status, ...$result, 'ok' => $result['errors'] === []];
+                $status = [...$status, ...$result, 'warnings' => [...$status['warnings'], ...$result['warnings']], 'ok' => $result['errors'] === []];
             } catch (\Throwable $e) {
                 $status['errors'][] = $e->getMessage();
             }

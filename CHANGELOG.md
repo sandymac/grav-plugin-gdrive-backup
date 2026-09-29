@@ -1,3 +1,18 @@
+# v0.1.9
+## 2026-09-29
+
+1. [](#security)
+    * Page editors could reach the folder check through Admin2's `/data/resolve` (open to `api.pages.read`), reading the account's email and folder names and spending the site's Google token. `Status::folderCheck` is no longer on the dynamic-callable allowlist; the settings page still shows it.
+    * The scheduled-profiles line warns when backups include the site's Google sign-in (`user/data/gdrive/`: refresh token, client secret, service-account key), which Grav's default profile archives, and says how to exclude it.
+1. [](#bugfix)
+    * A service account with a configured folder in My Drive showed ✔, then every sync failed with `storageQuotaExceeded`. The sync now stops before uploading and the folder check shows ✘, both saying to use a Shared Drive folder or an OAuth account.
+    * An upload whose response had no `md5Checksum` was trashed as a mismatch. The file is fetched once for its checksum; if Drive still reports none, the upload is kept and a warning says it couldn't be verified.
+    * A backup already on Drive under the same name but with a different checksum counted as a good copy. It's uploaded again and verified, and only then is the bad copy trashed; a failed re-upload holds back retention like any failed upload.
+    * Recreating a trashed configured folder reused any live folder with the same name in its parent. It now always creates a new folder, with " (2)", (3)… added to the name if it is taken.
+1. [](#improved)
+    * When the configured folder comes back after a replacement was made, the sync uses it again and warns, with a link, while the replacement still holds backups; the folder check shows the same ⚠. The replacement is forgotten once it's trashed, gone or empty of backups.
+    * Clearer help for **Keep newest** and **Sync schedule**.
+
 # v0.1.8
 ## 2026-09-29
 

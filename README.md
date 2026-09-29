@@ -56,6 +56,8 @@ plugin only manages Drive.
      shared with the service account as **Content Manager** (service accounts
      have no storage of their own).
    Changing the mode changes the scope, so reconnect OAuth accounts afterwards.
+   A service account with a folder in My Drive can't upload (no storage
+   there): the check below shows ✘ and the sync stops before uploading.
 
 Under **Drive folder** a one-line check says what the next sync will do with
 the *saved* settings: the folder it will create, or the folder's name, where
@@ -78,9 +80,10 @@ default, `recreate_folder: true`):
 
 - **Blank mode**, own folder in the trash or gone: a new "Grav backups
   (&lt;site&gt;)" is created in My Drive and remembered.
-- **Folder set**, and it's in the trash: a folder with the same name is
-  created next to it (in its first parent, which works in Shared Drives) and
-  used until you change the setting.
+- **Folder set**, and it's in the trash: a new folder with the same name is
+  created next to it (in its first parent, which works in Shared Drives), or
+  with " (2)", (3)… added if a folder there already has that name (an existing
+  folder is never adopted), and used until you change the setting.
 - **Folder set**, and Drive can't find it (deleted, or no longer shared):
   OAuth accounts fall back to "Grav backups (&lt;site&gt;)" in My Drive.
   Service accounts have no My Drive, so the run stops.
@@ -89,6 +92,11 @@ The run still backs up, and "Last sync" shows a **Warning** (also in
 `grav.log`) until you fix the setting. The old folder is never restored,
 untrashed or deleted. With the option off, the run stops and reports the
 problem instead; nothing is uploaded and nothing is trashed.
+
+If the configured folder comes back (restored from the trash, or shared
+again), the sync uses it again. While the replacement still holds backups,
+"Last sync" and the folder check link to it so you can move them or trash
+it; once it's trashed, gone or empty of backups the plugin forgets it.
 4. In **Tools → Backups**, turn on the backup profile's schedule.
 5. Make sure cron runs Grav's scheduler every minute:
    `* * * * * cd /path/to/grav && bin/grav scheduler 1>> /dev/null 2>&1`.
@@ -113,8 +121,21 @@ problem instead; nothing is uploaded and nothing is trashed.
 - Old copies are **moved to Drive's trash**, never deleted permanently, so
   you have 30 days to change your mind.
 - If an upload fails, or its md5 doesn't match (the bad upload is trashed),
-  nothing else is trashed that run.
+  nothing else is trashed that run. If Drive reports no checksum even when
+  asked again, the upload is kept with a warning that it couldn't be verified.
+- A backup on Drive with the same name as a local one but a different md5 is
+  uploaded again; the bad copy is trashed only after the new one is verified.
 - All backup profiles share one retention count.
+
+## Your Google sign-in is in the backups
+
+Grav's default backup profile archives `user/`, which includes
+`user/data/gdrive/`: the site's Google refresh token, OAuth client secret or
+service-account key. Anyone who can open a backup zip can use it to reach your
+Google Drive. Keep the Drive folder private, or add `/user/data/gdrive` to the
+profile's **Exclude paths** in **Configuration → Backups** (you'll then
+reconnect Google after restoring). The scheduled-profiles line on the settings
+page warns while an active profile includes it.
 
 ## Restoring
 

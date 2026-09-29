@@ -1,7 +1,7 @@
 name: Google Drive Backup
 slug: gdrive-backup
 type: plugin
-version: 0.1.8
+version: 0.1.9
 description: Uploads Grav backups to Google Drive after they're made and keeps the newest N there, plus optional daily, weekly, monthly and yearly generations. Starred copies are never touched; old ones go to Drive's trash.
 icon: cloud-upload
 author:
@@ -87,7 +87,7 @@ form:
     keep:
       type: number
       label: Keep newest
-      help: How many of the newest backups to keep on Drive.
+      help: "How many of the newest backups to keep on Drive, counting all backup profiles together. Starred copies are kept too and don't count toward this number."
       default: 10
       validate:
         type: int
@@ -144,5 +144,5 @@ form:
     sync.at:
       type: text
       label: Sync schedule
-      help: Cron expression for the sync job. Needs cron running bin/grav scheduler.
+      help: "How often to look for backups made with **Backup now** and apply retention. The default, 15 * * * *, means once an hour at 15 minutes past. Scheduled backups upload as soon as they finish. Your host must run Grav's scheduler (see the README)."
       default: '15 * * * *'

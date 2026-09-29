@@ -92,6 +92,8 @@ final class FakeDrive
     public array $trashed = [];
     public array $queries = [];
     public bool $corrupt = false;
+    /** '' normal; 'upload': the upload response has no md5Checksum; 'always': files.get has none either */
+    public string $noMd5 = '';
     private array $sessions = [];
     private int $next = 0;
 
@@ -131,7 +133,7 @@ final class FakeDrive
             $bytes = stream_get_contents($opts['infile']);
             $id = $this->add($meta['name'], ['appProperties' => $meta['appProperties'], 'md5Checksum' => $this->corrupt ? md5('garbage') : md5((string) $bytes), 'parents' => $meta['parents']]);
 
-            return [200, (string) json_encode($this->files[$id]), []];
+            return [200, (string) json_encode(array_diff_key($this->files[$id], $this->noMd5 !== '' ? ['md5Checksum' => 1] : [])), []];
         }
         if ($method === 'PATCH' && json_decode($opts['body'], true) === ['trashed' => true]) {
             $id = basename($path);
@@ -141,7 +143,9 @@ final class FakeDrive
             return [200, (string) json_encode(['id' => $id]), []];
         }
         if ($method === 'GET' && preg_match('~/files/([^/]+)$~', $path, $m) === 1) {
-            return $m[1] === 'GONE' ? [404, '{"error":{"errors":[{"reason":"notFound"}]}}', []] : [200, (string) json_encode(['id' => $m[1], 'trashed' => $m[1] === 'TRASHED']), []];
+            $this->queries[] = "get {$m[1]} {$q['fields']}";
+
+            return isset($this->files[$m[1]]) ? [200, (string) json_encode(array_diff_key($this->files[$m[1]], $this->noMd5 === 'always' ? ['md5Checksum' => 1] : [])), []] : [404, '{"error":{"errors":[{"reason":"notFound"}]}}', []];
         }
 
         return [500, "unexpected {$method} {$path}", []];
@@ -154,7 +158,7 @@ $tmp = sys_get_temp_dir() . '/gdrive-backup-smoke-' . getmypid();
 $locals = static function (array $stamps) use ($tmp, $name): array {
     $out = [];
     foreach ($stamps as $ts) {
-        file_put_contents($path = $tmp . '/' . $name($ts), 'zip ' . $ts);
+        file_put_contents($path = $tmp . '/' . $name($ts), $name($ts)); // so FakeDrive::add()'s md5($name) is a good copy
         $out[$name($ts)] = $path;
     }
 
@@ -206,6 +210,42 @@ $r = $sync($fake, 1)->run($locals([$d[4]]));
 check($r['uploaded'] === [] && $fake->trashed === [$name($d[4])] && str_contains($r['errors'][0], 'md5 mismatch'), 'an md5 mismatch trashes the upload and records an error');
 check($fake->names() === [$name($d[1])] && str_contains((string) end($r['errors']), 'retention skipped'), 'retention does not trash old copies while an upload failed');
 
+// No md5Checksum in the upload response: fetched once, then verified as usual.
+$fake = new FakeDrive();
+$fake->noMd5 = 'upload';
+$fake->add($name($d[1]));
+$r = $sync($fake, 1)->run($locals([$d[4]]));
+check($r['uploaded'] === [$name($d[4])] && $r['warnings'] === [] && $r['trashed'] === [$name($d[1])] && preg_grep('/^get F\d+ md5Checksum$/', $fake->queries) !== [], 'no checksum in the upload response: files.get supplies it, verified, retention runs');
+$fake = new FakeDrive();
+$fake->noMd5 = 'upload';
+$fake->corrupt = true;
+$r = $sync($fake, 1)->run($locals([$d[4]]));
+check($r['uploaded'] === [] && $fake->trashed === [$name($d[4])] && str_contains($r['errors'][0], 'md5 mismatch'), 'a fetched checksum that differs still trashes the upload');
+$fake = new FakeDrive();
+$fake->noMd5 = 'always';
+$fake->add($name($d[1]));
+$r = $sync($fake, 1)->run($locals([$d[4]]));
+check($r['uploaded'] === [$name($d[4])] && in_array($name($d[4]), $fake->names(), true) && $r['errors'] === [] && $r['warnings'] === ["Drive didn't report a checksum for {$name($d[4])}, so it couldn't be verified."], 'no checksum at all: the upload is kept, counted, and warned about');
+
+// A same-name copy on Drive with a different md5 is replaced, and trashed only once the new one is verified.
+$fake = new FakeDrive();
+$fake->add($name($d[1]));
+$badId = $fake->add($name($d[4]), ['md5Checksum' => md5('truncated')]);
+$r = $sync($fake, 1)->run($locals([$d[4]]));
+$copies = array_values(array_filter($fake->files, static fn (array $f): bool => $f['name'] === $name($d[4])));
+check($r['uploaded'] === [$name($d[4])] && !isset($fake->files[$badId]) && count($copies) === 1 && $copies[0]['md5Checksum'] === md5($name($d[4])), 'a mismatched Drive copy is uploaded again and the bad copy trashed by id');
+check($r['trashed'] === [$name($d[4]), $name($d[1])] && $r['errors'] === [] && $r['drive_count'] === 1 && str_contains($r['warnings'][0] ?? '', "didn't match"), 'after the replacement, retention runs and the count is right');
+$fake = new FakeDrive();
+$fake->corrupt = true;
+$fake->add($name($d[1]));
+$badId = $fake->add($name($d[4]), ['md5Checksum' => md5('truncated')]);
+$r = $sync($fake, 1)->run($locals([$d[4]]));
+check(isset($fake->files[$badId]) && in_array($name($d[1]), $fake->names(), true) && $fake->trashed === [$name($d[4])] && str_contains((string) end($r['errors']), 'retention skipped'), 'a failed re-upload keeps the mismatched copy and skips retention');
+$fake = new FakeDrive();
+$fake->add($name($d[4]), ['md5Checksum' => null]);
+$r = $sync($fake, 1)->run($locals([$d[4]]));
+check($r['uploaded'] === [] && count($fake->files) === 1, 'a Drive copy with no checksum is left alone, not re-uploaded every run');
+
 // Generational retention reaches through to Drive.
 $fake = new FakeDrive();
 $fake->add($name($t('2026-07-10')));
@@ -222,6 +262,7 @@ final class FolderFake
     /** @var list<array{string, string, ?array}> method, path, JSON body */
     public array $calls = [];
     public bool $refuseCreate = false;
+    public bool $failList = false;
     private int $next = 0;
 
     public function __invoke(string $method, string $url, array $opts): array
@@ -230,9 +271,15 @@ final class FolderFake
         parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
         $body = isset($opts['body']) ? json_decode($opts['body'], true) : null;
         $this->calls[] = [$method, $path, $body];
-        if ($method === 'GET' && $path === '/drive/v3/files') { // ensureFolder's lookup: an untrashed same-name child
-            preg_match("~^'([^']+)' in parents.* name='([^']+)'$~", $q['q'], $m);
-            $hit = array_filter($this->folders, static fn (array $f): bool => empty($f['trashed']) && $f['name'] === $m[2] && $f['parents'] === [$m[1]]);
+        if ($method === 'GET' && $path === '/drive/v3/files') { // untrashed children: folders (by name, if asked), or tagged backups
+            if ($this->failList) {
+                return [500, '{"error":{"errors":[{"reason":"backendError"}]}}', []];
+            }
+            preg_match("~^'([^']+)' in parents~", $q['q'], $p);
+            $name = preg_match("~name='([^']+)'~", $q['q'], $n) === 1 ? $n[1] : null;
+            $tagged = str_contains($q['q'], 'appProperties has');
+            $hit = array_filter($this->folders, static fn (array $f): bool => empty($f['trashed']) && in_array($p[1], $f['parents'], true)
+                && ($tagged ? ($f['appProperties']['grav_backup'] ?? '') === '1' : !isset($f['appProperties']) && ($name === null || $f['name'] === $name)));
 
             return [200, (string) json_encode(['files' => array_values($hit)]), []];
         }
@@ -309,8 +356,38 @@ $r = $resolve($dir('CFG', 'Backups', true), 'CFG', ['auto_folder_id' => ''], fal
 check(($r['stop'] ?? '') === 'Your configured Drive folder is in the trash. Restore it or choose another, or turn on Recreate a missing folder.' && $ff->created() === [], 'set, trashed + recreate off: the run stops');
 $r = $resolve($dir('CFG', 'Backups', true, []), 'CFG', ['auto_folder_id' => ''], true);
 check($r['id'] === 'NEW1' && $ff->created()[0][2]['parents'] === ['root'] && str_contains((string) $r['warning'], "backing up to 'Grav backups (example.com)' in My Drive"), 'set, trashed with no parent: falls back to My Drive');
-$r = $resolve($dir('CFG', 'Backups', true), 'CFG', ['auto_folder_id' => ''], true, true, true);
+$r = $resolve(['CFG' => ['driveId' => '0ASD'] + $dir('CFG', 'Backups', true)['CFG']], 'CFG', ['auto_folder_id' => ''], true, true, true);
 check(str_contains($r['stop'] ?? '', "couldn't be found") && str_contains($r['stop'], 'Service accounts have no My Drive'), "set, trashed, can't create beside it, service account: stops as if gone");
+
+// Recreating beside a trashed folder never adopts a live same-name folder: "(2)", then "(3)".
+$r = $resolve($dir('CFG', 'Backups', true, ['P']) + $dir('OTHER', 'Backups', false, ['P']), 'CFG', ['auto_folder_id' => ''], true);
+check($r['id'] === 'NEW1' && $ff->created()[0][2] === ['name' => 'Backups (2)', 'mimeType' => Drive::FOLDER, 'parents' => ['P']], 'set, trashed + a live same-name sibling: a new "Backups (2)", the sibling not adopted');
+$r = $resolve($dir('CFG', 'Backups', true, ['P']) + $dir('OTHER', 'Backups', false, ['P']) + $dir('OTHER2', 'Backups (2)', false, ['P']) + $dir('ELSE', 'Backups (3)', false, ['Q']), 'CFG', ['auto_folder_id' => ''], true);
+check($r['id'] === 'NEW1' && $ff->created()[0][2]['name'] === 'Backups (3)', 'set, trashed + "Backups" and "Backups (2)" taken: "Backups (3)" (names elsewhere do not count)');
+
+// Service account + a configured folder in My Drive: stop before uploading, trashed or not.
+$saMy = 'This folder is in My Drive. A service account has no storage there, so Google refuses uploads. Use a folder in a Shared Drive, shared with the service account as Content manager, or use an OAuth account.';
+foreach ([false, true] as $trashed) {
+    $r = $resolve($dir('CFG', 'Backups', $trashed), 'CFG', ['auto_folder_id' => ''], true, true);
+    check(($r['stop'] ?? '') === $saMy && $ff->created() === [], 'set, service account, My Drive folder' . ($trashed ? ' (trashed)' : '') . ': the run stops');
+}
+$r = $resolve(['CFG' => ['driveId' => '0ASD'] + $dir('CFG', 'Backups')['CFG']], 'CFG', ['auto_folder_id' => ''], true, true);
+check(($r['id'] ?? '') === 'CFG', 'set, service account, Shared Drive folder: used');
+
+// The configured folder is back after a replacement: use it, but point at the replacement while it holds backups.
+$backup = ['B1' => ['id' => 'B1', 'name' => 'x--20260101000000.zip', 'trashed' => false, 'parents' => ['REP'], 'appProperties' => ['grav_backup' => '1']]];
+$back = 'Your folder is back. Backups made while it was missing are still in "Backups" ([open it](https://drive.google.com/drive/folders/REP)). Move them into your folder, or trash that folder once you don\'t need them.';
+$r = $resolve($dir('CFG', 'Backups') + $dir('REP', 'Backups') + $backup, 'CFG', ['auto_folder_id' => '', 'replacement' => ['for' => 'CFG', 'id' => 'REP']], true);
+check($r['id'] === 'CFG' && $r['status']['replacement'] === ['for' => 'CFG', 'id' => 'REP'] && $r['warning'] === $back, 'set, back + replacement holds backups: the configured folder, the replacement remembered, a warning with its link');
+foreach (['empty' => $dir('REP', 'Backups'), 'trashed' => $dir('REP', 'Backups', true) + $backup, 'gone' => []] as $how => $reps) {
+    $r = $resolve($dir('CFG', 'Backups') + $reps, 'CFG', ['auto_folder_id' => '', 'replacement' => ['for' => 'CFG', 'id' => 'REP']], true);
+    check($r['id'] === 'CFG' && $r['status']['replacement'] === null && $r['warning'] === null, "set, back + replacement {$how}: forgotten, no warning");
+}
+$fail = new FolderFake();
+$fail->folders = $dir('CFG', 'Backups') + $dir('REP', 'Backups') + $backup;
+$fail->failList = true;
+$r = Sync::resolveFolder(new Drive($creds, [Drive::SCOPE_FULL], $fail), 'CFG', ['replacement' => ['for' => 'CFG', 'id' => 'REP']], 'example.com', true);
+check($r['id'] === 'CFG' && $r['status']['replacement'] === ['for' => 'CFG', 'id' => 'REP'] && $r['warning'] === null, "set, back + the replacement can't be listed: the backup goes ahead, the replacement still remembered");
 
 $r = $resolve([], 'CFG', ['auto_folder_id' => ''], true);
 check($r['id'] === 'NEW1' && $r['status']['replacement'] === ['for' => 'CFG', 'id' => 'NEW1'] && $ff->created()[0][2]['name'] === 'Grav backups (example.com)' && $ff->created()[0][2]['parents'] === ['root'], 'set, 404 + OAuth + recreate: "Grav backups (<site>)" in My Drive, remembered');
@@ -366,10 +443,17 @@ $cases = [
     'set, view only' => [$verdict('CFG', [], $f('Backups', $shared + ['capabilities' => ['canAddChildren' => false, 'canTrashChildren' => false]])), ['✘', 'This account can only view "Backups". Share it as **Editor** (My Drive) or **Content manager** (Shared Drive).']],
     'set, trashed + live replacement' => [$verdict('CFG', $withRep, $f('Backups', ['trashed' => true]), $f('Backups', ['id' => 'REP']), '', false), ['⚠', 'Your folder is in the trash; backups go to the replacement "Backups". Update the Drive folder setting.']],
     'set, trashed + another folder\'s replacement' => [$verdict('CFG', ['replacement' => ['for' => 'OTHER', 'id' => 'REP']], $f('Backups', ['trashed' => true]), $f('Backups', ['id' => 'REP']), '', false)[0], '✘'],
-    'set, trashed + trashed replacement + recreate' => [$verdict('CFG', $withRep, $f('Backups', ['trashed' => true]), $f('Backups', ['id' => 'REP', 'trashed' => true])), ['⚠', 'Your folder is in the trash; the next sync creates a replacement beside it.']],
+    'set, trashed + trashed replacement + recreate' => [$verdict('CFG', $withRep, $f('Backups', ['trashed' => true]), $f('Backups', ['id' => 'REP', 'trashed' => true])), ['⚠', 'Your folder is in the trash. The next sync creates a new folder beside it with the same name (or with " (2)" if that name is taken).']],
+    'set, back + replacement holds backups' => [$verdict('CFG', $withRep, $f('Backups'), $f('Backups', ['id' => 'REP'])), ['⚠', $back]],
+    'set, back + replacement emptied (leftover() null)' => [$verdict('CFG', $withRep, $f('Backups'))[0], '✔'],
+    'set, back + another folder\'s replacement' => [$verdict('CFG', ['replacement' => ['for' => 'OTHER', 'id' => 'REP']], $f('Backups'), $f('Backups', ['id' => 'REP']))[0], '✔'],
+    'set, service account, My Drive' => [$verdict('CFG', [], $f('Backups'), null, '', true, true), ['✘', $saMy]],
+    'set, service account, My Drive, view-only too' => [$verdict('CFG', [], $f('Backups', ['capabilities' => ['canAddChildren' => false]]), null, '', true, true), ['✘', $saMy]],
+    'set, service account, My Drive, trashed' => [$verdict('CFG', [], $f('Backups', ['trashed' => true]), null, '', true, true), ['✘', $saMy]],
+    'set, service account, Shared Drive' => [$verdict('CFG', [], $f('Backups', $shared), null, 'Team', true, true)[0], '✔'],
     'set, trashed + recreate off' => [$verdict('CFG', [], $f('Backups', ['trashed' => true]), null, '', false), ['✘', 'Your folder is in the trash; the next sync will stop. Restore it or choose another, or turn on **Recreate a missing folder**.']],
     'set, trashed, no parent, OAuth' => [$verdict('CFG', [], $f('Backups', ['trashed' => true, 'parents' => []])), ['⚠', 'Your folder is in the trash; the next sync backs up to "Grav backups (example.com)" in My Drive instead.']],
-    'set, trashed, no parent, service account' => [$verdict('CFG', [], $f('Backups', ['trashed' => true, 'parents' => []]), null, '', true, true), ['✘', 'Your folder is in the trash; the next sync will stop.']],
+    'set, trashed, no parent, service account' => [$verdict('CFG', [], $f('Backups', ['trashed' => true, 'parents' => [], 'driveId' => '0ASD']), null, '', true, true), ['✘', 'Your folder is in the trash; the next sync will stop.']],
     'set, 404 + OAuth + recreate' => [$verdict('CFG'), ['✘', "`me@example.com` can't see that folder: check the link, and share it with that account; the next sync backs up to \"Grav backups (example.com)\" in My Drive instead."]],
     'set, 404 + recreate off' => [$verdict('CFG', [], null, null, '', false)[1], "`me@example.com` can't see that folder: check the link, and share it with that account; the next sync will stop."],
     'set, 404 + service account' => [$verdict('CFG', [], null, null, '', true, true)[1], "`svc@p.iam.gserviceaccount.com` can't see that folder: check the link, and share it with that account; the next sync will stop."],
@@ -388,6 +472,8 @@ $evil = $verdict('CFG', [], $f('<script>x</script> `a` [l](j:x) *b* _c_ |d| \\e'
 check(!str_contains($evil, '<') && !str_contains($evil, '`') && !str_contains($evil, '[') && !str_contains($evil, '*') && !str_contains($evil, '_') && !str_contains($evil, '|') && !str_contains($evil, '\\'), 'folderVerdict() strips markup from Drive names: ' . $evil);
 $evil = Sync::folderVerdict('', ['auto_folder_id' => '', 'replacement' => null], null, null, '', true, false, 'p', "a`b\n<script>@x", 'ex_<a>', null, $auth)[1];
 check(substr_count($evil, '`') === 2 && !str_contains($evil, '<'), 'folderVerdict(): an email cannot break out of its code span, the site cannot inject tags: ' . $evil);
+$evil = $verdict('CFG', $withRep, $f('Backups'), $f('<script>[x](j:y)</script>', ['id' => 'R")<div id="z">']))[1];
+check(!str_contains($evil, '<') && !str_contains($evil, '[x]') && str_contains($evil, 'folders/Rdividz)'), 'folderVerdict(): the replacement\'s name and id cannot inject markup: ' . $evil);
 $long = $verdict('CFG', [], null, null, '', true, false, new \RuntimeException(str_repeat('é', 400)))[1];
 check(mb_strlen($long) < 220 && !str_contains($long, 'how to fix'), 'folderVerdict(): a long non-Drive error is shortened, with no fix link');
 check(Status::folderCheck() === "• Couldn't check the folder right now.", 'folderCheck() without Grav: a neutral line, not an exception');
@@ -424,6 +510,30 @@ check(Status::profileList([['Default Site Backup', '0 3 * * *'], ['My *site*', '
 check(!str_contains(Status::profileList([['x', "0 3 `* * *"]]), '``'), 'profileList(): a backtick in a schedule cannot break out of its code span');
 $notice = Status::profilesNotice(); // no Grav here: must fall back, not throw
 check(str_contains($notice, 'Configuration → Backups') && !str_contains($notice, '<'), 'profilesNotice() falls back to plain words without Grav');
+
+// --- Page editors can't reach the folder check through Admin2's /data/resolve.
+$main = (string) file_get_contents(__DIR__ . '/../gdrive-backup.php');
+check(preg_match('/addAllowedDynamicCallable\([^;]*folderCheck/', $main) === 0 && preg_match('/addAllowedDynamicCallable\([^;]*folderHelp/', $main) === 1, 'folderCheck is not on the dynamic-callable allowlist; folderHelp is');
+
+// --- Does a backup profile's zip hold user/data/gdrive? Grav's matching: relative to the root, prefix, slashes trimmed.
+$grav = "/backup\r\n/cache\r\n/images\r\n/logs\r\n/tmp";
+foreach ([
+    [true, '/', $grav, "Grav's default profile"],
+    [true, '/', '', 'no excludes'],
+    [false, '/', "{$grav}\r\n/user/data/gdrive", 'exact path, CRLF'],
+    [false, '/', "/tmp\nuser/data/gdrive/", 'no leading slash, trailing slash, LF'],
+    [false, '/', '/user/data', 'a parent: /user/data'],
+    [false, '/', "/cache\r\n/user\r\n", 'a parent: /user'],
+    [false, '/', '/cache, /user/data/gdrive', 'comma-separated'],
+    [true, '/', '/user/dat', 'a partial name is not a parent'],
+    [true, '/', '/user/data/gdrive-backup', 'a sibling with a longer name does not cover it'],
+    [false, '/user/pages', '', 'a root elsewhere does not include it'],
+    [true, '/user', '/tmp', 'root /user includes it'],
+    [false, '/user', '/data/gdrive', 'root /user: excludes are relative to it'],
+    [true, 'user://', '/user/data/gdrive', 'root user://: /user/data/gdrive would be user/user/…'],
+] as [$want, $root, $ex, $what]) {
+    check(Status::includesSignIn($root, $ex) === $want, "includesSignIn(): {$what}");
+}
 
 // --- Lock: a held lock skips the run.
 $lock = $tmp . '/sync.lock';
