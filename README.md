@@ -43,7 +43,7 @@ plugin only manages Drive.
 
 1. Install and enable **gdrive** and **gdrive-backup** (`user/plugins/gdrive`
    and `user/plugins/gdrive-backup`).
-2. On the **Google Drive Library** plugin's settings page, create an account and
+2. On the **Google Drive Auth** plugin's settings page, create an account and
    follow its guide. The guide lists the scope this plugin needs.
 3. On this plugin's page, choose the account and a folder mode:
    - **Folder ID empty** (OAuth accounts only): the plugin creates

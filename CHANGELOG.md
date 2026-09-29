@@ -1,3 +1,9 @@
+# v0.1.2
+## 2026-09-29
+
+1. [](#improved)
+    * Settings help points at the renamed **Google Drive Auth** plugin.
+
 # v0.1.1
 ## 2026-09-29
 
