@@ -3,6 +3,7 @@ account: personal            # any gdrive account
 # folder: empty → plugin creates "Grav backups (<host>)" in the account's My Drive (drive.file scope; OAuth only)
 #         set   → an existing folder ID (needs `drive` scope); required for service accounts, and must be in a Shared Drive
 folder: ''
+recreate_folder: true        # folder trashed or gone → make a new one and keep going (never restores or deletes); false → stop and report
 keep: 10                     # newest N kept on Drive
 generational: { days: 0, weeks: 0, months: 0, years: 0 }   # kept in addition to the newest N, as in the HA add-on
 sync: { enabled: true, at: '15 * * * *' }                   # catch-up/retention job

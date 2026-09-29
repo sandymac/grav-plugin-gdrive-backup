@@ -87,6 +87,10 @@ final class Status
             (int) ($s['drive_count'] ?? 0),
             $e($s['folder_id'] ?? ''),
         );
+        foreach ((array) ($s['warnings'] ?? []) as $w) {
+            $lines[] = '';
+            $lines[] = '**Warning:** ' . $e($w);
+        }
         if (!empty($s['errors'])) {
             $lines[] = '';
         }

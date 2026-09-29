@@ -18,7 +18,7 @@ use RocketTheme\Toolbox\Event\Event;
  */
 class GdriveBackupPlugin extends Plugin
 {
-    public const VERSION = '0.1.4';
+    public const VERSION = '0.1.5';
     public const JOB = 'gdrive-backup-sync';
 
     private static bool $warnedMissing = false;
@@ -107,13 +107,19 @@ class GdriveBackupPlugin extends Plugin
 
         $summary = Sync::locked(Status::dir() . '/sync.lock', function (): string {
             $config = (array) $this->config->get('plugins.gdrive-backup', []);
+            $folder = $this->folder();
             $previous = Status::read();
-            $status = ['last_run' => date('c'), 'ok' => false, 'uploaded' => [], 'trashed' => [], 'errors' => [], 'folder_id' => (string) ($previous['folder_id'] ?? ''), 'drive_count' => 0];
+            $status = ['last_run' => date('c'), 'ok' => false, 'uploaded' => [], 'trashed' => [], 'errors' => [], 'warnings' => [], 'folder_id' => (string) ($previous['folder_id'] ?? ''), 'drive_count' => 0] + Sync::memory($previous, $folder);
             try {
                 $site = Status::site();
-                $folder = $this->folder();
-                $drive = Gdrive::drive((string) ($config['account'] ?? 'personal'), [$folder === '' ? Drive::SCOPE_FILE : Drive::SCOPE_FULL]);
-                $status['folder_id'] = Sync::folder($drive, $folder, $folder === '' ? $status['folder_id'] : '', $site);
+                $account = (string) ($config['account'] ?? 'personal');
+                $drive = Gdrive::drive($account, [$folder === '' ? Drive::SCOPE_FILE : Drive::SCOPE_FULL]);
+                $sa = $this->config->get("plugins.gdrive.accounts.{$account}.type") === 'service_account';
+                $resolved = Sync::resolveFolder($drive, $folder, $status, $site, (bool) ($config['recreate_folder'] ?? true), $sa, $account);
+                $status = ['folder_id' => $resolved['id']] + $resolved['status'];
+                if ($resolved['warning'] !== null) {
+                    $status['warnings'][] = $resolved['warning'];
+                }
 
                 $local = [];
                 foreach (Backups::getAvailableBackups(true) as $b) {
@@ -125,17 +131,21 @@ class GdriveBackupPlugin extends Plugin
                 $status['errors'][] = $e->getMessage();
             }
             Status::write($status);
+            foreach ($status['warnings'] as $w) {
+                $this->grav['log']->warning('gdrive-backup: ' . $w);
+            }
             foreach ($status['errors'] as $err) {
                 $this->grav['log']->error('gdrive-backup: ' . $err);
             }
 
             return sprintf(
-                'gdrive-backup: %s, uploaded %d, trashed %d, %d on Drive%s',
+                'gdrive-backup: %s, uploaded %d, trashed %d, %d on Drive%s%s',
                 $status['ok'] ? 'OK' : 'FAILED',
                 count($status['uploaded']),
                 count($status['trashed']),
                 $status['drive_count'],
                 $status['errors'] === [] ? '' : ': ' . implode('; ', $status['errors']),
+                $status['warnings'] === [] ? '' : ' (warning: ' . implode('; ', $status['warnings']) . ')',
             );
         });
 

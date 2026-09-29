@@ -21,6 +21,7 @@ spl_autoload_register(static function (string $class) use ($lib): void {
 
 use Grav\Plugin\Gdrive\Credentials;
 use Grav\Plugin\Gdrive\Drive;
+use Grav\Plugin\Gdrive\DriveException;
 use Grav\Plugin\GdriveBackup\Retention;
 use Grav\Plugin\GdriveBackup\Sync;
 
@@ -212,15 +213,135 @@ $fake->add($name($t('2026-08-05')));
 $r = $sync($fake, 1, ['months' => 3])->run($locals([$d[4]]));
 check($r['trashed'] === [$name($t('2026-07-10'))] && $fake->names() === [$name($t('2026-07-20')), $name($t('2026-08-05')), $name($d[4])], 'months=3 keeps the newest of July and August on Drive');
 
-// Folder choice: configured, remembered, or created.
-$drive = new Drive($creds, [Drive::SCOPE_FILE], $fake = new FakeDrive());
-check(Sync::folder($drive, 'CFG', 'OLD', 'example.com') === 'CFG', 'a configured folder id wins');
-check(Sync::folder($drive, '', 'OLD', 'example.com') === 'OLD', 'a remembered folder is reused while it exists');
-$fake->files = [];
-$ensure = new Drive($creds, [Drive::SCOPE_FILE], static function (string $m, string $u, array $o) use ($fake): array {
-    return $m === 'POST' ? [200, '{"id":"NEWFOLDER"}', []] : $fake($m, $u, $o);
-});
-check(Sync::folder($ensure, '', 'GONE', 'example.com') === 'NEWFOLDER' && Sync::folder($ensure, '', 'TRASHED', 'example.com') === 'NEWFOLDER', 'a missing or trashed remembered folder is recreated');
+// --- Folder resolution: blank or set, alive, trashed or gone, recreate on or off.
+final class FolderFake
+{
+    /** @var array<string, array> id => folder */
+    public array $folders = [];
+    /** @var list<array{string, string, ?array}> method, path, JSON body */
+    public array $calls = [];
+    public bool $refuseCreate = false;
+    private int $next = 0;
+
+    public function __invoke(string $method, string $url, array $opts): array
+    {
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
+        $body = isset($opts['body']) ? json_decode($opts['body'], true) : null;
+        $this->calls[] = [$method, $path, $body];
+        if ($method === 'GET' && $path === '/drive/v3/files') { // ensureFolder's lookup: an untrashed same-name child
+            preg_match("~^'([^']+)' in parents.* name='([^']+)'$~", $q['q'], $m);
+            $hit = array_filter($this->folders, static fn (array $f): bool => empty($f['trashed']) && $f['name'] === $m[2] && $f['parents'] === [$m[1]]);
+
+            return [200, (string) json_encode(['files' => array_values($hit)]), []];
+        }
+        if ($method === 'GET' && preg_match('~/files/([^/]+)$~', $path, $m) === 1) {
+            return isset($this->folders[$m[1]]) ? [200, (string) json_encode($this->folders[$m[1]]), []] : [404, '{"error":{"errors":[{"reason":"notFound"}]}}', []];
+        }
+        if ($method === 'POST' && $path === '/drive/v3/files') {
+            if ($this->refuseCreate) {
+                return [403, '{"error":{"errors":[{"reason":"insufficientFilePermissions"}]}}', []];
+            }
+            $id = 'NEW' . ++$this->next;
+            $this->folders[$id] = ['id' => $id, 'name' => $body['name'], 'trashed' => false, 'parents' => $body['parents']];
+
+            return [200, (string) json_encode(['id' => $id]), []];
+        }
+
+        return [500, "unexpected {$method} {$path}", []];
+    }
+
+    /** @return list<array> the POSTs (folder creations) */
+    public function created(): array
+    {
+        return array_values(array_filter($this->calls, static fn (array $c): bool => $c[0] === 'POST'));
+    }
+}
+$ff = null;
+$allCalls = [];
+/** One resolveFolder() over a fresh fake; a stop comes back as ['stop' => message]. */
+$resolve = static function (array $folders, string $configured, array $status, bool $recreate, bool $sa = false, bool $refuse = false) use ($creds, &$ff, &$allCalls): array {
+    $ff = new FolderFake();
+    $ff->folders = $folders;
+    $ff->refuseCreate = $refuse;
+    try {
+        return Sync::resolveFolder(new Drive($creds, [Drive::SCOPE_FULL], $ff), $configured, $status, 'example.com', $recreate, $sa, 'personal');
+    } catch (\RuntimeException $e) {
+        return ['stop' => $e->getMessage()];
+    } finally {
+        $allCalls = [...$allCalls, ...$ff->calls];
+    }
+};
+$dir = static fn (string $id, string $name, bool $trashed = false, array $parents = ['root']): array => [$id => ['id' => $id, 'name' => $name, 'trashed' => $trashed, 'parents' => $parents]];
+$trashedWarning = 'Your configured folder is in the trash; backing up to the replacement. Update the Drive folder setting.';
+
+// Blank setting.
+$r = $resolve([], '', [], true);
+check($r['id'] === 'NEW1' && $r['status']['auto_folder_id'] === 'NEW1' && $r['warning'] === null && $ff->created()[0][2]['name'] === 'Grav backups (example.com)' && $ff->created()[0][2]['parents'] === ['root'], 'blank, first run: creates "Grav backups (<site>)" in My Drive, no warning');
+$r = $resolve([], '', [], false);
+check($r['id'] === 'NEW1' && $r['warning'] === null, 'blank, first run creates even with recreate off');
+$r = $resolve($dir('AUTO', 'Renamed by owner'), '', ['auto_folder_id' => 'AUTO'], true);
+check($r['id'] === 'AUTO' && $r['warning'] === null && $ff->created() === [], 'blank: the remembered folder is reused (renamed or moved is fine)');
+foreach (['trashed' => $dir('AUTO', 'Grav backups (example.com)', true), 'gone' => []] as $how => $folders) {
+    $r = $resolve($folders, '', ['auto_folder_id' => 'AUTO'], true);
+    check($r['id'] === 'NEW1' && $r['status']['auto_folder_id'] === 'NEW1' && $r['warning'] === 'The backup folder was in the trash or gone; created a new one.', "blank, {$how} + recreate: a new folder, remembered, with a warning");
+    $r = $resolve($folders, '', ['auto_folder_id' => 'AUTO'], false);
+    check(($r['stop'] ?? '') === "The plugin's backup folder is in the trash or gone. Restore it, or turn on Recreate a missing folder." && $ff->created() === [], "blank, {$how} + recreate off: the run stops, nothing created");
+}
+
+// Set folder.
+$r = $resolve($dir('CFG', 'Backups'), 'CFG', ['auto_folder_id' => '', 'replacement' => ['for' => 'CFG', 'id' => 'OLDREP']], true);
+check($r['id'] === 'CFG' && $r['warning'] === null && $r['status']['replacement'] === null && $ff->created() === [], 'set, OK: the configured folder is used and a stale replacement dropped');
+$r = $resolve($dir('CFG', 'Backups', true, ['0ASHARED']), 'CFG', ['auto_folder_id' => ''], true);
+check($r['id'] === 'NEW1' && $r['status']['replacement'] === ['for' => 'CFG', 'id' => 'NEW1'] && $ff->created()[0][2]['name'] === 'Backups' && $ff->created()[0][2]['parents'] === ['0ASHARED'], 'set, trashed + recreate: a same-name folder in its first parent (a Shared Drive root here), remembered');
+check($r['warning'] === $trashedWarning, 'set, trashed: warns to update the setting');
+$live = $dir('CFG', 'Backups', true) + $dir('REP', 'Backups');
+$r = $resolve($live, 'CFG', ['auto_folder_id' => '', 'replacement' => ['for' => 'CFG', 'id' => 'REP']], true);
+check($r['id'] === 'REP' && $ff->created() === [] && $r['warning'] === $trashedWarning, 'set, trashed + a live replacement: reused without creating, still warns');
+$r = $resolve($live, 'CFG', ['auto_folder_id' => '', 'replacement' => ['for' => 'CFG', 'id' => 'REP']], false);
+check(($r['id'] ?? '') === 'REP', 'set, trashed + a live replacement: reused even with recreate off');
+$r = $resolve($dir('CFG', 'Backups', true) + $dir('REP', 'Backups', true), 'CFG', ['auto_folder_id' => '', 'replacement' => ['for' => 'CFG', 'id' => 'REP']], true);
+check($r['id'] === 'NEW1' && $r['status']['replacement']['id'] === 'NEW1', 'set, trashed + a trashed replacement: a fresh one');
+$r = $resolve($dir('CFG', 'Backups', true) + $dir('REP', 'Backups', false, ['ELSEWHERE']), 'CFG', ['auto_folder_id' => '', 'replacement' => ['for' => 'OTHER', 'id' => 'REP']], true);
+check($r['id'] === 'NEW1', "set, trashed: another folder's replacement is not borrowed");
+$r = $resolve($dir('CFG', 'Backups', true), 'CFG', ['auto_folder_id' => ''], false);
+check(($r['stop'] ?? '') === 'Your configured Drive folder is in the trash. Restore it or choose another, or turn on Recreate a missing folder.' && $ff->created() === [], 'set, trashed + recreate off: the run stops');
+$r = $resolve($dir('CFG', 'Backups', true, []), 'CFG', ['auto_folder_id' => ''], true);
+check($r['id'] === 'NEW1' && $ff->created()[0][2]['parents'] === ['root'] && str_contains((string) $r['warning'], "backing up to 'Grav backups (example.com)' in My Drive"), 'set, trashed with no parent: falls back to My Drive');
+$r = $resolve($dir('CFG', 'Backups', true), 'CFG', ['auto_folder_id' => ''], true, true, true);
+check(str_contains($r['stop'] ?? '', "couldn't be found") && str_contains($r['stop'], 'Service accounts have no My Drive'), "set, trashed, can't create beside it, service account: stops as if gone");
+
+$r = $resolve([], 'CFG', ['auto_folder_id' => ''], true);
+check($r['id'] === 'NEW1' && $r['status']['replacement'] === ['for' => 'CFG', 'id' => 'NEW1'] && $ff->created()[0][2]['name'] === 'Grav backups (example.com)' && $ff->created()[0][2]['parents'] === ['root'], 'set, 404 + OAuth + recreate: "Grav backups (<site>)" in My Drive, remembered');
+check($r['warning'] === "Your configured Drive folder couldn't be found (deleted, or no longer shared); backing up to 'Grav backups (example.com)' in My Drive. Update the Drive folder setting.", 'set, 404: warns with the fallback folder name');
+$r = $resolve($dir('REP', 'Grav backups (example.com)'), 'CFG', ['auto_folder_id' => '', 'replacement' => ['for' => 'CFG', 'id' => 'REP']], false);
+check(($r['id'] ?? '') === 'REP' && $ff->created() === [] && str_contains((string) $r['warning'], "couldn't be found"), 'set, 404 + a live replacement: reused');
+$r = $resolve([], 'CFG', ['auto_folder_id' => ''], true, true);
+check(($r['stop'] ?? '') === "Your configured Drive folder couldn't be found. It was deleted or is no longer shared with personal. Service accounts have no My Drive to fall back to." && $ff->created() === [], 'set, 404 + service account: stops, nothing created');
+$r = $resolve([], 'CFG', ['auto_folder_id' => ''], false);
+check(($r['stop'] ?? '') === "Your configured Drive folder couldn't be found. It was deleted or is no longer shared with personal." && $ff->created() === [], 'set, 404 + recreate off: stops');
+try {
+    Sync::resolveFolder(new Drive($creds, [Drive::SCOPE_FULL], static fn (): array => [500, '{"error":{"errors":[{"reason":"backendError"}]}}', []]), 'CFG', [], 'example.com', true);
+    $err = null;
+} catch (DriveException $e) {
+    $err = $e->reason;
+}
+check($err === 'backendError', 'any other Drive error is rethrown, so the run stops');
+
+// Bug B: a configured folder is not reused once the setting is cleared.
+$st = $resolve($dir('CFG', 'Backups'), 'CFG', [], true)['status'];
+$st['folder_id'] = 'CFG'; // what sync() writes for display
+$r = $resolve($dir('CFG', 'Backups'), '', $st, true);
+check($r['id'] === 'NEW1' && $r['status']['auto_folder_id'] === 'NEW1', 'set → cleared to blank: the configured folder is not reused, the plugin makes its own');
+
+// Old status (0.1.4 and earlier) had only folder_id.
+$r = $resolve($dir('OLD', 'Grav backups (example.com)'), '', ['folder_id' => 'OLD'], true);
+check($r['id'] === 'OLD' && $r['status']['auto_folder_id'] === 'OLD' && $ff->created() === [], 'migration, blank: the old folder_id is the auto folder');
+$r = $resolve($dir('OLD', 'Grav backups (example.com)') + $dir('CFG', 'Backups'), 'CFG', ['folder_id' => 'OLD'], true);
+check($r['id'] === 'CFG' && $r['status']['auto_folder_id'] === '', 'migration, set: the old folder_id is ignored');
+check(Sync::memory(['folder_id' => 'X', 'auto_folder_id' => ''], '') === ['auto_folder_id' => '', 'replacement' => null], 'migration runs once: a saved empty auto_folder_id stays empty');
+
+check(count($allCalls) > 30 && array_filter($allCalls, static fn (array $c): bool => $c[0] === 'DELETE' || $c[0] === 'PATCH' || ($c[2]['trashed'] ?? null) === false) === [], 'folder resolution never deletes, patches or untrashes anything');
 
 // --- Folder setting: a bare id or any Drive folder link the owner pastes.
 $id = '1LwqGziKeXXdo1T5y4q3dqEuAehSGCuAT';
@@ -239,7 +360,6 @@ check(Sync::folderId('https://drive.google.com/drive/folders/0AK0-ofF-eHHHUk9PVA
 check(Sync::folderName('example.com') === 'Grav backups (example.com)', 'folderName() is the one place the folder name is built');
 $help = \Grav\Plugin\GdriveBackup\Status::folderHelp(); // no Grav here: must fall back, not throw
 check(str_contains($help, 'Grav backups') && !str_contains($help, '<') && !str_contains($help, '()'), 'folderHelp() falls back to words without Grav, with no tag-like text Admin2 would strip');
-check(str_contains((string) end($fake->queries), "name='Grav backups (example.com)'"), 'the created folder is named after the site');
 
 // --- Lock: a held lock skips the run.
 $lock = $tmp . '/sync.lock';

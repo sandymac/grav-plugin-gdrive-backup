@@ -125,27 +125,92 @@ final class Sync
     }
 
     /**
-     * The folder to sync into: the configured id, else the remembered one if it
-     * still exists outside the trash, else "Grav backups (<site>)" in My Drive.
+     * The folder memories kept in status.json. An old status (before 0.1.5) had
+     * only folder_id, which in blank-setting mode was the plugin's own folder;
+     * with a folder set it was the configured one and must not be reused later.
+     *
+     * @return array{auto_folder_id: string, replacement: ?array{for: string, id: string}}
      */
-    public static function folder(Drive $drive, string $configured, string $remembered, string $site): string
+    public static function memory(array $status, string $configured): array
     {
-        if ($configured !== '') {
-            return $configured;
+        $rep = $status['replacement'] ?? null;
+
+        return [
+            'auto_folder_id' => array_key_exists('auto_folder_id', $status) ? (string) $status['auto_folder_id'] : ($configured === '' ? (string) ($status['folder_id'] ?? '') : ''),
+            'replacement' => is_array($rep) && is_string($rep['for'] ?? null) && is_string($rep['id'] ?? null) ? ['for' => $rep['for'], 'id' => $rep['id']] : null,
+        ];
+    }
+
+    /**
+     * The folder to sync into this run. Blank setting: the plugin's own folder,
+     * created on the first run. Set: the configured folder. If either is in the
+     * trash or gone, $recreate makes a new one (a same-name sibling for a trashed
+     * configured folder, else "Grav backups (<site>)" in My Drive) and remembers
+     * it; otherwise the run stops. Never restores or deletes anything.
+     *
+     * @return array{id: string, status: array, warning: ?string}
+     * @throws \RuntimeException (DriveException included) with a message for the owner: the run stops
+     */
+    public static function resolveFolder(Drive $drive, string $configured, array $status, string $site, bool $recreate, bool $serviceAccount = false, string $account = 'the account'): array
+    {
+        $status = [...$status, ...self::memory($status, $configured)];
+
+        if ($configured === '') {
+            $auto = $status['auto_folder_id'];
+            if ($auto !== '' && empty(self::file($drive, $auto, 'id,trashed')['trashed'] ?? true)) {
+                return ['id' => $auto, 'status' => $status, 'warning' => null];
+            }
+            if ($auto !== '' && !$recreate) {
+                throw new \RuntimeException("The plugin's backup folder is in the trash or gone. Restore it, or turn on Recreate a missing folder.");
+            }
+            $status['auto_folder_id'] = $drive->ensureFolder(self::folderName($site));
+
+            return ['id' => $status['auto_folder_id'], 'status' => $status, 'warning' => $auto === '' ? null : 'The backup folder was in the trash or gone; created a new one.'];
         }
-        if ($remembered !== '') {
-            try {
-                if (empty($drive->request('GET', '/files/' . rawurlencode($remembered), ['fields' => 'id,trashed'])['trashed'])) {
-                    return $remembered;
-                }
-            } catch (DriveException $e) {
-                if ($e->status !== 404) {
-                    throw $e;
+
+        $f = self::file($drive, $configured, 'id,name,trashed,parents,driveId,capabilities(canAddChildren)');
+        if ($f !== null && empty($f['trashed'])) {
+            return ['id' => $configured, 'status' => ['replacement' => null] + $status, 'warning' => null];
+        }
+        $trashedWarning = 'Your configured folder is in the trash; backing up to the replacement. Update the Drive folder setting.';
+        $rep = $status['replacement'];
+        if ($rep !== null && $rep['for'] === $configured && empty(self::file($drive, $rep['id'], 'id,trashed')['trashed'] ?? true)) {
+            return ['id' => $rep['id'], 'status' => $status, 'warning' => $f !== null ? $trashedWarning : "Your configured Drive folder couldn't be found (deleted, or no longer shared); backing up to the replacement. Update the Drive folder setting."];
+        }
+        if ($f !== null) {
+            if (!$recreate) {
+                throw new \RuntimeException('Your configured Drive folder is in the trash. Restore it or choose another, or turn on Recreate a missing folder.');
+            }
+            $parent = (string) ($f['parents'][0] ?? '');
+            if ($parent !== '') {
+                try {
+                    $status['replacement'] = ['for' => $configured, 'id' => $drive->ensureFolder((string) $f['name'], $parent)];
+
+                    return ['id' => $status['replacement']['id'], 'status' => $status, 'warning' => $trashedWarning];
+                } catch (DriveException) {
+                    // can't create beside it: fall back as if it were gone
                 }
             }
         }
+        if (!$recreate || $serviceAccount) {
+            throw new \RuntimeException("Your configured Drive folder couldn't be found. It was deleted or is no longer shared with {$account}." . ($serviceAccount ? ' Service accounts have no My Drive to fall back to.' : ''));
+        }
+        $status['replacement'] = ['for' => $configured, 'id' => $drive->ensureFolder(self::folderName($site))];
 
-        return $drive->ensureFolder(self::folderName($site));
+        return ['id' => $status['replacement']['id'], 'status' => $status, 'warning' => "Your configured Drive folder couldn't be found (deleted, or no longer shared); backing up to '" . self::folderName($site) . "' in My Drive. Update the Drive folder setting."];
+    }
+
+    /** files.get, or null when Drive says 404 (gone, or not shared with this account). */
+    private static function file(Drive $drive, string $id, string $fields): ?array
+    {
+        try {
+            return $drive->request('GET', '/files/' . rawurlencode($id), ['fields' => $fields]);
+        } catch (DriveException $e) {
+            if ($e->status === 404) {
+                return null;
+            }
+            throw $e;
+        }
     }
 
     /**

@@ -7,7 +7,7 @@ yearly generations. It's modelled on the Home Assistant add-on
 
 Requires PHP 8.3+, Grav 2.0.23+ and the
 [gdrive](https://github.com/sandymac/grav-plugin-gdrive) library plugin
-(0.1.0+), which holds the Google accounts. No Composer dependencies.
+(0.1.8+), which holds the Google accounts. No Composer dependencies.
 
 ## What it does
 
@@ -56,6 +56,31 @@ plugin only manages Drive.
      shared with the service account as **Content Manager** (service accounts
      have no storage of their own).
    Changing the mode changes the scope, so reconnect OAuth accounts afterwards.
+
+### If the folder is trashed or gone
+
+The folder the plugin created (blank mode), and any replacement it made, are
+remembered in `user/data/gdrive-backup/status.json` (`auto_folder_id`,
+`replacement`); `folder_id` there is just the folder the last run used.
+Clearing the **Drive folder** setting never reuses the folder that was
+configured before: the plugin goes back to its own folder.
+
+Each run checks the folder first. With **Recreate a missing folder** on (the
+default, `recreate_folder: true`):
+
+- **Blank mode**, own folder in the trash or gone: a new "Grav backups
+  (&lt;site&gt;)" is created in My Drive and remembered.
+- **Folder set**, and it's in the trash: a folder with the same name is
+  created next to it (in its first parent, which works in Shared Drives) and
+  used until you change the setting.
+- **Folder set**, and Drive can't find it (deleted, or no longer shared):
+  OAuth accounts fall back to "Grav backups (&lt;site&gt;)" in My Drive.
+  Service accounts have no My Drive, so the run stops.
+
+The run still backs up, and "Last sync" shows a **Warning** (also in
+`grav.log`) until you fix the setting. The old folder is never restored,
+untrashed or deleted. With the option off, the run stops and reports the
+problem instead; nothing is uploaded and nothing is trashed.
 4. In **Tools → Backups**, turn on the backup profile's schedule.
 5. Make sure cron runs Grav's scheduler every minute:
    `* * * * * cd /path/to/grav && bin/grav scheduler 1>> /dev/null 2>&1`.

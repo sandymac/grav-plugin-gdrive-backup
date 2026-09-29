@@ -1,3 +1,14 @@
+# v0.1.5
+## 2026-09-29
+
+1. [](#new)
+    * **Recreate a missing folder** (`recreate_folder`, on by default): if the backup folder is in Drive's trash or gone, the sync creates a new one and keeps backing up, with a **Warning** on the settings page and in `grav.log`. A trashed configured folder gets a same-name sibling; one Drive can't find falls back to "Grav backups (<site>)" in My Drive (OAuth accounts only). The old folder is never restored or deleted. Off: the run stops and says why.
+1. [](#bugfix)
+    * Clearing the **Drive folder** setting reused the folder that had been configured before, instead of the plugin's own folder. The plugin's own folder and any replacement are now remembered separately in `status.json`; an old status is migrated.
+    * A configured folder in the trash was never noticed: uploads landed inside the trashed folder and the run said OK.
+    * `blueprints.yaml` had a YAML syntax error (`help:"…` with no space) in the Drive folder field.
+    * Requires gdrive 0.1.8, where an account granted full `drive` also satisfies blank-folder mode's `drive.file`.
+
 # v0.1.4
 ## 2026-09-29
 

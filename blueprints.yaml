@@ -1,7 +1,7 @@
 name: Google Drive Backup
 slug: gdrive-backup
 type: plugin
-version: 0.1.4
+version: 0.1.5
 description: Uploads Grav backups to Google Drive after they're made and keeps the newest N there, plus optional daily, weekly, monthly and yearly generations. Starred copies are never touched; old ones go to Drive's trash.
 icon: cloud-upload
 author:
@@ -17,7 +17,7 @@ compatibility:
 
 dependencies:
   - { name: grav, version: ">=2.0.23" }
-  - { name: gdrive, version: '>=0.1.0' }
+  - { name: gdrive, version: '>=0.1.8' }
 
 form:
   validation: loose
@@ -57,8 +57,20 @@ form:
       type: text
       label: Drive folder (link or ID)
       data-help@: '\Grav\Plugin\GdriveBackup\Status::folderHelp'
-      help:"Empty: the plugin creates its own folder, named \"Grav backups\" plus this site's host name in brackets, for example \"Grav backups (example.com)\", in the account's My Drive (OAuth accounts only; needs just drive.file). Set: paste the folder's link from Drive's address bar or its Share dialog, or just its ID; this needs full Drive access. Service accounts have no My Drive, so they must use a folder in a Shared Drive, shared with the service account as Content Manager."
+      help: "Empty: the plugin creates its own folder, named \"Grav backups\" plus this site's host name in brackets, for example \"Grav backups (example.com)\", in the account's My Drive (OAuth accounts only; needs just drive.file). Set: paste the folder's link from Drive's address bar or its Share dialog, or just its ID; this needs full Drive access. Service accounts have no My Drive, so they must use a folder in a Shared Drive, shared with the service account as Content Manager."
       placeholder: https://drive.google.com/drive/folders/1AbCdEf…
+
+    recreate_folder:
+      type: toggle
+      label: Recreate a missing folder
+      help: "If the backup folder is in Drive's trash or gone, create a new one and keep backing up (the old folder is never restored or deleted). Off: stop and report instead."
+      highlight: 1
+      default: true
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
 
     keep:
       type: number
