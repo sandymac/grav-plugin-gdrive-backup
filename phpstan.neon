@@ -1,0 +1,16 @@
+parameters:
+    level: 6
+    phpVersion: 80300
+    ignoreErrors:
+        # array value-type docblocks add nothing to Drive's raw JSON resources
+        - identifier: missingType.iterableValue
+    paths:
+        - gdrive-backup.php
+        - classes
+    # Symbol resolution comes from a real Grav install at .gravtest/grav-admin
+    # and the gdrive library checked out next to this repo (CI recreates both
+    # layouts; see .github/workflows/ci.yml).
+    bootstrapFiles:
+        - .gravtest/grav-admin/vendor/autoload.php
+    scanDirectories:
+        - ../grav-plugin-gdrive/classes

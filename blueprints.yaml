@@ -1,0 +1,123 @@
+name: Google Drive Backup
+slug: gdrive-backup
+type: plugin
+version: 0.1.0
+description: Uploads Grav backups to Google Drive after they're made and keeps the newest N there, plus optional daily, weekly, monthly and yearly generations. Starred copies are never touched; old ones go to Drive's trash.
+icon: cloud-upload
+author:
+  name: Sandy McArthur
+  email: sandy@mcarthur.org
+  url: https://sandy.mcarthur.org
+homepage: https://github.com/sandymac/grav-plugin-gdrive-backup
+bugs: https://github.com/sandymac/grav-plugin-gdrive-backup/issues
+keywords: google drive, backup, retention, scheduler
+license: MIT
+compatibility:
+  grav: ["2.0"]
+
+dependencies:
+  - { name: grav, version: ">=2.0.23" }
+  - { name: gdrive, version: '>=0.1.0' }
+
+form:
+  validation: loose
+  fields:
+    enabled:
+      type: toggle
+      label: PLUGIN_ADMIN.PLUGIN_STATUS
+      highlight: 1
+      default: true
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
+
+    status:
+      type: display
+      label: Last sync
+      markdown: true
+      style: vertical
+      data-content@: '\Grav\Plugin\GdriveBackup\Status::markdown'
+
+    account:
+      type: select
+      label: Google Drive account
+      help: Set up accounts on the Google Drive plugin's settings page.
+      data-options@: '\Grav\Plugin\Gdrive\Setup::accountOptions'
+      default: personal
+
+    gdrive_notice:
+      type: display
+      markdown: true
+      style: vertical
+      data-content@: ['\Grav\Plugin\Gdrive\Setup::consumerNotice', 'gdrive-backup']
+
+    folder:
+      type: text
+      label: Folder ID
+      help: "Empty: the plugin creates its own \"Grav backups (<site>)\" folder in the account's My Drive (OAuth accounts only; needs just drive.file). Set: an existing folder's ID, which needs full Drive access. Service accounts have no My Drive, so they must use a folder in a Shared Drive, shared with the service account as Content Manager."
+      placeholder: 1AbCdEf...
+
+    keep:
+      type: number
+      label: Keep newest
+      help: How many of the newest backups to keep on Drive.
+      default: 10
+      validate:
+        type: int
+        min: 1
+
+    generational.days:
+      type: number
+      label: Also keep daily
+      help: Keep the newest backup from each of the last N days, on top of the newest ones. 0 turns it off.
+      default: 0
+      validate:
+        type: int
+        min: 0
+
+    generational.weeks:
+      type: number
+      label: Also keep weekly
+      help: The newest backup from each of the last N weeks (ISO, Monday to Sunday).
+      default: 0
+      validate:
+        type: int
+        min: 0
+
+    generational.months:
+      type: number
+      label: Also keep monthly
+      help: The newest backup from each of the last N calendar months.
+      default: 0
+      validate:
+        type: int
+        min: 0
+
+    generational.years:
+      type: number
+      label: Also keep yearly
+      help: The newest backup from each of the last N calendar years.
+      default: 0
+      validate:
+        type: int
+        min: 0
+
+    sync.enabled:
+      type: toggle
+      label: Sync job
+      help: Scheduler job gdrive-backup-sync uploads backups made from the admin's "Backup now" and applies retention. Scheduled backups upload straight away.
+      highlight: 1
+      default: true
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
+
+    sync.at:
+      type: text
+      label: Sync schedule
+      help: Cron expression for the sync job. Needs cron running bin/grav scheduler.
+      default: '15 * * * *'

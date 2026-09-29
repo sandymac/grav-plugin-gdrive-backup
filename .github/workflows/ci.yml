@@ -1,0 +1,66 @@
+name: ci
+
+on: [push, pull_request]
+
+env:
+  GDRIVE_LIB: lib
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.3', '8.4']  # 8.3 matches Grav 2 core's ^8.3; 8.4 catches forward-compat breakage
+    steps:
+      - uses: actions/checkout@v5
+
+      # The gdrive library is a private repo. GDRIVE_LIB_TOKEN is a fine-grained
+      # PAT with read access (Contents: read) to sandymac/grav-plugin-gdrive only.
+      - uses: actions/checkout@v5
+        with:
+          repository: sandymac/grav-plugin-gdrive
+          path: lib
+          token: ${{ secrets.GDRIVE_LIB_TOKEN }}
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+
+      - run: git ls-files '*.php' | xargs -P4 -n1 php -l > /dev/null
+
+      - run: php tests/smoke.php
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - run: pipx install yamllint && yamllint blueprints.yaml gdrive-backup.yaml
+
+  phpstan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # See the test job: fine-grained PAT, read access to the library only.
+      - uses: actions/checkout@v5
+        with:
+          repository: sandymac/grav-plugin-gdrive
+          path: lib
+          token: ${{ secrets.GDRIVE_LIB_TOKEN }}
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: phpstan
+
+      # phpstan.neon resolves Grav symbols from a real install at
+      # .gravtest/grav-admin and the library from ../grav-plugin-gdrive —
+      # recreate the local dev layout. Vendors are for symbol scanning only,
+      # hence --ignore-platform-reqs.
+      - run: |
+          git clone --depth 1 -b 2.0.23 https://github.com/getgrav/grav .gravtest/grav-admin
+          composer install -q -d .gravtest/grav-admin --no-dev --ignore-platform-reqs
+          ln -s "$PWD/$GDRIVE_LIB" ../grav-plugin-gdrive
+
+      - run: phpstan analyse --memory-limit=1G

@@ -1,0 +1,5 @@
+CLAUDE.local.md
+.claude/
+vendor/
+.gravtest/
+cache/
