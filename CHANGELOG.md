@@ -1,3 +1,9 @@
+# v0.1.10
+## 2026-09-29
+
+1. [](#improved)
+    * In **Last sync**, the word "folder" links to the Drive folder; the ID next to it stays plain so it copies easily.
+
 # v0.1.9
 ## 2026-09-29
 

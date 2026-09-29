@@ -510,6 +510,8 @@ check(Status::profileList([['Default Site Backup', '0 3 * * *'], ['My *site*', '
 check(!str_contains(Status::profileList([['x', "0 3 `* * *"]]), '``'), 'profileList(): a backtick in a schedule cannot break out of its code span');
 $notice = Status::profilesNotice(); // no Grav here: must fall back, not throw
 check(str_contains($notice, 'Configuration → Backups') && !str_contains($notice, '<'), 'profilesNotice() falls back to plain words without Grav');
+check(Status::folderRef('1LwqGziKeXXdo1T5y4q3dqEuAehSGCuAT') === '[folder](https://drive.google.com/drive/folders/1LwqGziKeXXdo1T5y4q3dqEuAehSGCuAT) `1LwqGziKeXXdo1T5y4q3dqEuAehSGCuAT`', 'folderRef() links the word "folder" and leaves the id plain for copying');
+check(Status::folderRef('') === 'folder' && Status::folderRef('x) [evil](javascript:alert(1)') === 'folder', 'folderRef() only builds a link from Drive-id characters');
 
 // --- Page editors can't reach the folder check through Admin2's /data/resolve.
 $main = (string) file_get_contents(__DIR__ . '/../gdrive-backup.php');

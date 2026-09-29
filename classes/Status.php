@@ -271,6 +271,22 @@ final class Status
         return rtrim((string) $grav['uri']->rootUrl(false), '/') . "/{$route}/{$path}";
     }
 
+    /**
+     * "[folder](https://drive.google.com/drive/folders/<id>) `<id>`": the word links to
+     * the folder and the id stays plain so it copies easily. Only Drive-id characters
+     * reach the URL; anything else shows as plain "folder". Pure.
+     * ponytail: same-tab link; Admin2 runs display fields through DOMPurify's defaults,
+     * which strip target="_blank". Ctrl/Cmd-click opens it in a new tab.
+     */
+    public static function folderRef(string $id): string
+    {
+        if (preg_match('/^[A-Za-z0-9_-]{10,}$/', $id) !== 1) {
+            return 'folder';
+        }
+
+        return "[folder](https://drive.google.com/drive/folders/{$id}) `{$id}`";
+    }
+
     /** data-content@ renderer for the blueprint's "Last sync" display field. */
     public static function markdown(): string
     {
@@ -283,13 +299,13 @@ final class Status
         }
         $e = static fn (mixed $v): string => htmlspecialchars((string) $v, ENT_QUOTES);
         $lines[] = sprintf(
-            '**Last sync:** %s, %s. Uploaded %d, trashed %d, %d backup(s) on Drive (folder `%s`).',
+            '**Last sync:** %s, %s. Uploaded %d, trashed %d, %d backup(s) on Drive (%s).',
             $e($s['last_run'] ?? '?'),
             empty($s['ok']) ? '**failed**' : 'OK',
             count((array) ($s['uploaded'] ?? [])),
             count((array) ($s['trashed'] ?? [])),
             (int) ($s['drive_count'] ?? 0),
-            $e($s['folder_id'] ?? ''),
+            self::folderRef((string) ($s['folder_id'] ?? '')),
         );
         foreach ((array) ($s['warnings'] ?? []) as $w) {
             $lines[] = '';
