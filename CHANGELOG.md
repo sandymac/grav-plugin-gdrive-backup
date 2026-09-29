@@ -1,3 +1,11 @@
+# v0.1.3
+## 2026-09-29
+
+1. [](#improved)
+    * The folder setting (now **Drive folder**) accepts a folder link pasted from Drive, such as `https://drive.google.com/drive/folders/<id>?usp=sharing` or `.../open?id=<id>`, as well as a bare ID.
+1. [](#bugfix)
+    * Its help text showed "Grav backups ()": Admin2 stripped the `<site>` placeholder as an HTML tag. It now says the folder is named after the site's host name, with an example.
+
 # v0.1.2
 ## 2026-09-29
 

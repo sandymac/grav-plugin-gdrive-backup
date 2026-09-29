@@ -41,7 +41,7 @@ final class Status
         $lines = [];
         $account = (string) $config->get('plugins.gdrive-backup.account', 'personal');
         if ((string) $config->get('plugins.gdrive-backup.folder', '') === '' && $config->get("plugins.gdrive.accounts.{$account}.type") === 'service_account') {
-            $lines[] = "**Warning:** `{$account}` is a service account, which has no My Drive to create a folder in. Set **Folder ID** to a folder in a Shared Drive shared with it as **Content Manager**, or use an OAuth account.";
+            $lines[] = "**Warning:** `{$account}` is a service account, which has no My Drive to create a folder in. Set **Drive folder** to a folder in a Shared Drive shared with it as **Content Manager**, or use an OAuth account.";
             $lines[] = '';
         }
 

@@ -18,7 +18,7 @@ use RocketTheme\Toolbox\Event\Event;
  */
 class GdriveBackupPlugin extends Plugin
 {
-    public const VERSION = '0.1.2';
+    public const VERSION = '0.1.3';
     public const JOB = 'gdrive-backup-sync';
 
     private static bool $warnedMissing = false;
@@ -142,7 +142,7 @@ class GdriveBackupPlugin extends Plugin
 
     private function folder(): string
     {
-        return trim((string) $this->config->get('plugins.gdrive-backup.folder', ''));
+        return Sync::folderId((string) $this->config->get('plugins.gdrive-backup.folder', ''));
     }
 
     /**

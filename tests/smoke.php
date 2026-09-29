@@ -221,6 +221,21 @@ $ensure = new Drive($creds, [Drive::SCOPE_FILE], static function (string $m, str
     return $m === 'POST' ? [200, '{"id":"NEWFOLDER"}', []] : $fake($m, $u, $o);
 });
 check(Sync::folder($ensure, '', 'GONE', 'example.com') === 'NEWFOLDER' && Sync::folder($ensure, '', 'TRASHED', 'example.com') === 'NEWFOLDER', 'a missing or trashed remembered folder is recreated');
+
+// --- Folder setting: a bare id or any Drive folder link the owner pastes.
+$id = '1LwqGziKeXXdo1T5y4q3dqEuAehSGCuAT';
+foreach ([
+    $id, "  {$id}  ",
+    "https://drive.google.com/drive/folders/{$id}",
+    "https://drive.google.com/drive/folders/{$id}?usp=sharing",
+    "https://drive.google.com/drive/u/1/folders/{$id}?usp=drive_link",
+    "https://drive.google.com/open?id={$id}",
+    "https://drive.google.com/folderview?usp=sharing&id={$id}",
+] as $pasted) {
+    check(Sync::folderId($pasted) === $id, "folderId() extracts the id from: {$pasted}");
+}
+check(Sync::folderId('') === '' && Sync::folderId('   ') === '', 'folderId() keeps empty as empty (plugin makes its own folder)');
+check(Sync::folderId('https://drive.google.com/drive/folders/0AK0-ofF-eHHHUk9PVA') === '0AK0-ofF-eHHHUk9PVA', 'folderId() handles a Shared Drive root link');
 check(str_contains((string) end($fake->queries), "name='Grav backups (example.com)'"), 'the created folder is named after the site');
 
 // --- Lock: a held lock skips the run.

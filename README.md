@@ -46,12 +46,12 @@ plugin only manages Drive.
 2. On the **Google Drive Auth** plugin's settings page, create an account and
    follow its guide. The guide lists the scope this plugin needs.
 3. On this plugin's page, choose the account and a folder mode:
-   - **Folder ID empty** (OAuth accounts only): the plugin creates
+   - **Drive folder empty** (OAuth accounts only): the plugin creates
      "Grav backups (&lt;site&gt;)" in that account's My Drive and remembers it,
      so you can rename or move it. It needs only `drive.file`, which sees only
      files this plugin created. `<site>` is the host of `system.custom_base_url`,
      or the server's hostname if that's empty.
-   - **Folder ID set**: an existing folder, which needs full `drive` access.
+   - **Drive folder set**: an existing folder, pasted as its Drive link or its ID, which needs full `drive` access.
      **Service accounts must use this**, with a folder in a **Shared Drive**
      shared with the service account as **Content Manager** (service accounts
      have no storage of their own).

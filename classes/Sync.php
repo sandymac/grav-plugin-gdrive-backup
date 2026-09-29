@@ -104,6 +104,21 @@ final class Sync
     }
 
     /**
+     * The folder id from what the owner pasted: a bare id, or a Drive link such as
+     * https://drive.google.com/drive/u/0/folders/<id>?usp=sharing or .../open?id=<id>.
+     * Anything else comes back trimmed, so Drive's notFound names the problem. Pure.
+     */
+    public static function folderId(string $input): string
+    {
+        $input = trim($input);
+        if (preg_match('~/folders/([A-Za-z0-9_-]+)~', $input, $m) === 1 || preg_match('~[?&]id=([A-Za-z0-9_-]+)~', $input, $m) === 1) {
+            return $m[1];
+        }
+
+        return $input;
+    }
+
+    /**
      * The folder to sync into: the configured id, else the remembered one if it
      * still exists outside the trash, else "Grav backups (<site>)" in My Drive.
      */
