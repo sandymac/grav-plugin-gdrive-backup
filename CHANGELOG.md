@@ -1,3 +1,9 @@
+# v0.1.4
+## 2026-09-29
+
+1. [](#improved)
+    * The Drive folder help names the folder the plugin will create, with this site's real host name in it, from the same code the sync uses.
+
 # v0.1.3
 ## 2026-09-29
 

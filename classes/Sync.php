@@ -103,6 +103,12 @@ final class Sync
         return $out;
     }
 
+    /** The name of the folder the plugin creates when none is configured. Pure; the settings help shows it too. */
+    public static function folderName(string $site): string
+    {
+        return "Grav backups ({$site})";
+    }
+
     /**
      * The folder id from what the owner pasted: a bare id, or a Drive link such as
      * https://drive.google.com/drive/u/0/folders/<id>?usp=sharing or .../open?id=<id>.
@@ -139,7 +145,7 @@ final class Sync
             }
         }
 
-        return $drive->ensureFolder("Grav backups ({$site})");
+        return $drive->ensureFolder(self::folderName($site));
     }
 
     /**

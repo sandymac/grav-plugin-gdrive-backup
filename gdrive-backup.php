@@ -18,7 +18,7 @@ use RocketTheme\Toolbox\Event\Event;
  */
 class GdriveBackupPlugin extends Plugin
 {
-    public const VERSION = '0.1.3';
+    public const VERSION = '0.1.4';
     public const JOB = 'gdrive-backup-sync';
 
     private static bool $warnedMissing = false;
@@ -40,6 +40,8 @@ class GdriveBackupPlugin extends Plugin
     public function autoload(): void
     {
         self::registerAutoload();
+        // Admin2 may resolve data-*@ through the API's /data/resolve, which only calls allowlisted providers.
+        \Grav\Common\Data\Blueprint::addAllowedDynamicCallable(Status::class . '::folderHelp');
     }
 
     /** Idempotent spl fallback so a git clone into user/plugins works without Composer. */
@@ -108,7 +110,7 @@ class GdriveBackupPlugin extends Plugin
             $previous = Status::read();
             $status = ['last_run' => date('c'), 'ok' => false, 'uploaded' => [], 'trashed' => [], 'errors' => [], 'folder_id' => (string) ($previous['folder_id'] ?? ''), 'drive_count' => 0];
             try {
-                $site = $this->site();
+                $site = Status::site();
                 $folder = $this->folder();
                 $drive = Gdrive::drive((string) ($config['account'] ?? 'personal'), [$folder === '' ? Drive::SCOPE_FILE : Drive::SCOPE_FULL]);
                 $status['folder_id'] = Sync::folder($drive, $folder, $folder === '' ? $status['folder_id'] : '', $site);
@@ -143,16 +145,5 @@ class GdriveBackupPlugin extends Plugin
     private function folder(): string
     {
         return Sync::folderId((string) $this->config->get('plugins.gdrive-backup.folder', ''));
-    }
-
-    /**
-     * The site name for the folder and the `site` tag. The scheduler runs in the
-     * CLI, where the request host is meaningless, so prefer custom_base_url.
-     */
-    private function site(): string
-    {
-        $host = parse_url((string) $this->config->get('system.custom_base_url', ''), PHP_URL_HOST);
-
-        return is_string($host) && $host !== '' ? $host : (string) gethostname();
     }
 }

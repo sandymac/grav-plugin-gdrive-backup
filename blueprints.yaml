@@ -1,7 +1,7 @@
 name: Google Drive Backup
 slug: gdrive-backup
 type: plugin
-version: 0.1.3
+version: 0.1.4
 description: Uploads Grav backups to Google Drive after they're made and keeps the newest N there, plus optional daily, weekly, monthly and yearly generations. Starred copies are never touched; old ones go to Drive's trash.
 icon: cloud-upload
 author:
@@ -56,7 +56,8 @@ form:
     folder:
       type: text
       label: Drive folder (link or ID)
-      help: "Empty: the plugin creates its own folder, named \"Grav backups\" plus this site's host name in brackets, for example \"Grav backups (example.com)\", in the account's My Drive (OAuth accounts only; needs just drive.file). Set: paste the folder's link from Drive's address bar or its Share dialog, or just its ID; this needs full Drive access. Service accounts have no My Drive, so they must use a folder in a Shared Drive, shared with the service account as Content Manager."
+      data-help@: '\Grav\Plugin\GdriveBackup\Status::folderHelp'
+      help:"Empty: the plugin creates its own folder, named \"Grav backups\" plus this site's host name in brackets, for example \"Grav backups (example.com)\", in the account's My Drive (OAuth accounts only; needs just drive.file). Set: paste the folder's link from Drive's address bar or its Share dialog, or just its ID; this needs full Drive access. Service accounts have no My Drive, so they must use a folder in a Shared Drive, shared with the service account as Content Manager."
       placeholder: https://drive.google.com/drive/folders/1AbCdEf…
 
     keep:

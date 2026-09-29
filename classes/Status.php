@@ -34,6 +34,32 @@ final class Status
         rename($file . '.tmp', $file);
     }
 
+    /**
+     * The site name for the folder and the `site` tag. The scheduler runs in the
+     * CLI, where the request host is meaningless, so prefer custom_base_url; the
+     * settings help uses this too, so it names the folder the sync will create.
+     */
+    public static function site(): string
+    {
+        $host = parse_url((string) Grav::instance()['config']->get('system.custom_base_url', ''), PHP_URL_HOST);
+
+        return is_string($host) && $host !== '' ? $host : (string) gethostname();
+    }
+
+    /** data-help@ for the folder field, with this site's real folder name in it. */
+    public static function folderHelp(): string
+    {
+        try {
+            $name = '"' . Sync::folderName(self::site()) . '"';
+        } catch (\Throwable) {
+            $name = 'a "Grav backups" folder named after this site';
+        }
+
+        return "Empty: the plugin creates its own {$name} folder in the account's My Drive (OAuth accounts only; needs just drive.file)."
+            . " Set: paste the folder's link from Drive's address bar or its Share dialog, or just its ID; this needs full Drive access."
+            . ' Service accounts have no My Drive, so they must use a folder in a Shared Drive, shared with the service account as Content Manager.';
+    }
+
     /** data-content@ renderer for the blueprint's "Last sync" display field. */
     public static function markdown(): string
     {
