@@ -54,7 +54,7 @@ gdrive.php                       autoload, service registration, OAuth callback 
 classes/Credentials.php          interface: token(array $scopes): string; email(): string
 classes/ServiceAccount.php       JWT RS256 via openssl_sign (moved from today's Drive::jwt)
 classes/OAuthUser.php            refresh-token exchange, PKCE auth URL, code exchange, revoke
-classes/Accounts.php             name → Credentials; reads config + user/data/gdrive/<name>.*.json
+classes/Accounts.php             name → Credentials; reads config + user/data/gdrive/auth/<name>.*.json
 classes/Http.php                 curl transport: retries/backoff 429+5xx, 401 → refresh once, errors → DriveException
 classes/DriveException.php       status + Google `reason` + troubleshooting anchor
 classes/Drive.php                thin Drive v3 client (below)
@@ -76,7 +76,7 @@ accounts:
   personal: { type: oauth }
 ```
 
-- **Files are stored by fixed name** under `user/data/gdrive/`, created with mode 0600:
+- **Files are stored by fixed name** under `user/data/gdrive/auth/`, created with mode 0600:
   - `<name>.sa.json` holds the service-account key;
   - `<name>.client.json` holds the OAuth Web client;
   - `<name>.token.json` holds the refresh token, the granted scopes and the Google email.
@@ -113,7 +113,7 @@ accounts:
 
 1. The admin clicks Connect, which calls `POST /api/v1/gdrive/accounts/{name}/connect` (requires `api.gdrive.manage`).
    - The server creates a random 32-byte `state` and a PKCE verifier.
-   - It stores `state → {account, verifier, username, expires: +10 min}` in `user/data/gdrive/oauth-state/` (mode 0600).
+   - It stores `state → {account, verifier, username, expires: +10 min}` in `user/data/gdrive/auth/oauth-state/` (mode 0600).
    - It returns Google's authorisation URL.
 2. Admin2 opens that URL in a popup, and the user consents.
 3. Google redirects the browser to the **public** `GET /gdrive-oauth/callback?state&code`. The plugin intercepts it the same way today's proxy route is intercepted (`onPluginsInitialized` compares the path, then `onPagesInitialized` at priority 100000 handles it and exits).

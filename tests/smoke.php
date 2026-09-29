@@ -517,18 +517,21 @@ check(Status::folderRef('') === 'folder' && Status::folderRef('x) [evil](javascr
 $main = (string) file_get_contents(__DIR__ . '/../gdrive-backup.php');
 check(preg_match('/addAllowedDynamicCallable\([^;]*folderCheck/', $main) === 0 && preg_match('/addAllowedDynamicCallable\([^;]*folderHelp/', $main) === 1, 'folderCheck is not on the dynamic-callable allowlist; folderHelp is');
 
-// --- Does a backup profile's zip hold user/data/gdrive? Grav's matching: relative to the root, prefix, slashes trimmed.
+// --- Does a backup profile's zip hold user/data/gdrive/auth? Grav's matching: relative to the root, prefix, slashes trimmed.
 $grav = "/backup\r\n/cache\r\n/images\r\n/logs\r\n/tmp";
 foreach ([
     [true, '/', $grav, "Grav's default profile"],
     [true, '/', '', 'no excludes'],
-    [false, '/', "{$grav}\r\n/user/data/gdrive", 'exact path, CRLF'],
-    [false, '/', "/tmp\nuser/data/gdrive/", 'no leading slash, trailing slash, LF'],
+    [false, '/', "{$grav}\r\n/user/data/gdrive/auth", 'exact path, CRLF'],
+    [false, '/', "/tmp\nuser/data/gdrive/auth/", 'no leading slash, trailing slash, LF'],
+    [false, '/', '/user/data/gdrive', 'the family dir (the pre-0.1.14 advice) still covers it'],
     [false, '/', '/user/data', 'a parent: /user/data'],
     [false, '/', "/cache\r\n/user\r\n", 'a parent: /user'],
-    [false, '/', '/cache, /user/data/gdrive', 'comma-separated'],
+    [false, '/', '/cache, /user/data/gdrive/auth', 'comma-separated'],
     [true, '/', '/user/dat', 'a partial name is not a parent'],
+    [true, '/', '/user/data/gdrive/aut', 'a partial subdir name is not a parent'],
     [true, '/', '/user/data/gdrive-backup', 'a sibling with a longer name does not cover it'],
+    [true, '/', '/user/data/gdrive/images', 'a sibling under the family dir does not cover it'],
     [false, '/user/pages', '', 'a root elsewhere does not include it'],
     [true, '/user', '/tmp', 'root /user includes it'],
     [false, '/user', '/data/gdrive', 'root /user: excludes are relative to it'],
