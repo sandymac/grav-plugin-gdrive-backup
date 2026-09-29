@@ -372,6 +372,8 @@ $profiles = [
 check(Status::activeProfiles($profiles, [], $hyph) === [['Default Site Backup', '0 3 * * *'], ['Media', '0 5 1 * *']], 'activeProfiles(): the schedule flag decides when no toggle is set');
 check(Status::activeProfiles($profiles, ['pages-only' => 'enabled', 'media' => 'disabled'], $hyph) === [['Default Site Backup', '0 3 * * *'], ['Pages Only', '0 4 * * 0']], 'activeProfiles(): an Enabled/Disabled toggle overrides the flag');
 check(Status::activeProfiles([], [], $hyph) === [], 'activeProfiles(): no profiles, none active');
+check(Status::profileList([['Default Site Backup', '0 3 * * *'], ['My *site*', '']]) === 'Default Site Backup (`0 3 * * *`), My site', 'profileList() keeps a cron schedule\'s * intact in its code span, and strips markup from names');
+check(!str_contains(Status::profileList([['x', "0 3 `* * *"]]), '``'), 'profileList(): a backtick in a schedule cannot break out of its code span');
 $notice = Status::profilesNotice(); // no Grav here: must fall back, not throw
 check(str_contains($notice, 'Configuration → Backups') && !str_contains($notice, '<'), 'profilesNotice() falls back to plain words without Grav');
 

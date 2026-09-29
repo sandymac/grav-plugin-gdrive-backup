@@ -1,3 +1,9 @@
+# v0.1.7
+## 2026-09-29
+
+1. [](#bugfix)
+    * The scheduled-profiles line showed a cron schedule with its `*`s stripped (`0 3   `); schedules keep them now.
+
 # v0.1.6
 ## 2026-09-29
 

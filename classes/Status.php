@@ -84,10 +84,21 @@ final class Status
         return $active;
     }
 
+    /**
+     * "Name (`0 3 * * *`), …" for the notice. Names go in as text (no markup);
+     * schedules go in a code span, where only a backtick could break out. Pure.
+     *
+     * @param array<int, array{0: string, 1: string}> $active
+     */
+    public static function profileList(array $active): string
+    {
+        return implode(', ', array_map(static fn (array $a): string => preg_replace('/[<>`|*_\[\]\r\n]/', '', $a[0])
+            . ($a[1] !== '' ? ' (`' . preg_replace('/[`\r\n]/', '', $a[1]) . '`)' : ''), $active));
+    }
+
     /** data-content@ for the line saying Grav itself makes the backups, and where that's set up. */
     public static function profilesNotice(): string
     {
-        $clean = static fn (string $s): string => (string) preg_replace('/[<>`|*_\[\]\r\n]/', '', $s);
         $where = '**Configuration → Backups**';
         try {
             $grav = Grav::instance();
@@ -98,7 +109,7 @@ final class Status
         } catch (\Throwable) {
             return "Grav makes the backups; this plugin uploads them. Set up what's backed up, and when, in {$where}.";
         }
-        $list = implode(', ', array_map(static fn (array $a): string => $clean($a[0]) . ($a[1] !== '' ? ' (`' . $clean($a[1]) . '`)' : ''), $active));
+        $list = self::profileList($active);
         $count = count($profiles);
         $state = match (true) {
             $count === 0 => 'There are no backup profiles yet.',
