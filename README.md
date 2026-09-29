@@ -59,6 +59,8 @@ plugin only manages Drive.
    A service account with a folder in My Drive can't upload (no storage
    there): the check below shows ✘ and the sync stops before uploading.
 
+Typing in the **Drive folder** box shows the parsed folder ID and warns before you save if the saved account needs a Reconnect for full Drive access.
+
 Under **Drive folder** a one-line check says what the next sync will do with
 the *saved* settings: the folder it will create, or the folder's name, where
 it is and whether the account can add and remove backups there (✔), or what

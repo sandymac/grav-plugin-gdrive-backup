@@ -141,6 +141,7 @@ final class Sync
      * The folder id from what the owner pasted: a bare id, or a Drive link such as
      * https://drive.google.com/drive/u/0/folders/<id>?usp=sharing or .../open?id=<id>.
      * Anything else comes back trimmed, so Drive's notFound names the problem. Pure.
+     * Keep in sync with parseFolder() in admin-next/fields/gdrive-folder.js (the settings hint).
      */
     public static function folderId(string $input): string
     {

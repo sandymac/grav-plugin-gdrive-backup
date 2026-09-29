@@ -558,4 +558,13 @@ preg_match('/^version:\s*(\S+)/m', $blueprints, $bv);
 preg_match("/const VERSION = '([^']+)'/", (string) file_get_contents(__DIR__ . '/../gdrive-backup.php'), $pv);
 check(($bv[1] ?? '') === ($pv[1] ?? 'missing'), sprintf('GdriveBackupPlugin::VERSION (%s) matches blueprints.yaml (%s)', $pv[1] ?? 'missing', $bv[1] ?? 'missing'));
 
+// --- Admin2 field sources: no form element (Admin2 bug), every button type="button", value fields dispatch change.
+foreach (glob(__DIR__ . '/../admin-next/fields/*.js') ?: [] as $js) {
+    $src = (string) file_get_contents($js);
+    $base = basename($js);
+    check(!str_contains($src, '<' . 'form'), "{$base}: no form element");
+    check(preg_match_all('/<button\b(?![^>]*\btype="button")/', $src) === 0, "{$base}: every button is type=\"button\"");
+    check(str_contains($src, "dispatchEvent(new CustomEvent('change'"), "{$base}: dispatches change");
+}
+
 echo "smoke: OK\n";

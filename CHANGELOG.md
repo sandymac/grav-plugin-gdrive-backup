@@ -1,3 +1,9 @@
+# v0.1.11
+## 2026-09-29
+
+1. [](#improved)
+    * The **Drive folder** setting shows the folder ID it parsed and warns before you save when the account needs a Reconnect for full Drive access (or is not connected).
+
 # v0.1.10
 ## 2026-09-29
 

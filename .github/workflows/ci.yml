@@ -30,6 +30,8 @@ jobs:
 
       - run: php tests/smoke.php
 
+      - run: for f in admin-next/fields/*.js; do node --check "$f"; done
+
   lint:
     runs-on: ubuntu-latest
     steps:
