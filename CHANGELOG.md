@@ -1,3 +1,9 @@
+# v0.1.8
+## 2026-09-29
+
+1. [](#new)
+    * A folder check line under **Drive folder** says what the next sync will do with the saved settings: the folder it will create, or the folder's name and Shared Drive and whether the account can add and remove backups there (✔), plus a plain fix when it can't (view-only, **Content manager** needed for retention, trashed, not shared, not connected, missing scope). It replaces the service-account warning above **Last sync**. Checked on page load with a 5-second limit and cached for 5 minutes. Needs gdrive 0.1.11.
+
 # v0.1.7
 ## 2026-09-29
 

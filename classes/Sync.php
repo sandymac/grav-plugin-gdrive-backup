@@ -19,6 +19,8 @@ final class Sync
 {
     public const TAG = 'grav_backup';
     public const FIELDS = 'id,name,size,md5Checksum,starred,appProperties,createdTime';
+    /** What the settings page's folder check asks of a configured folder. */
+    public const CHECK_FIELDS = 'id,name,trashed,parents,driveId,capabilities(canAddChildren,canTrashChildren)';
 
     /** @param array{days?: int, weeks?: int, months?: int, years?: int} $generational */
     public function __construct(
@@ -200,8 +202,106 @@ final class Sync
         return ['id' => $status['replacement']['id'], 'status' => $status, 'warning' => "Your configured Drive folder couldn't be found (deleted, or no longer shared); backing up to '" . self::folderName($site) . "' in My Drive. Update the Drive folder setting."];
     }
 
-    /** files.get, or null when Drive says 404 (gone, or not shared with this account). */
-    private static function file(Drive $drive, string $id, string $fields): ?array
+    /**
+     * The settings page's one-line folder check: what the next resolveFolder()
+     * will do, from lookups already made, changing nothing. Pure; it mirrors
+     * resolveFolder() branch for branch, so change the two together.
+     *
+     * @param array{auto_folder_id: string, replacement: ?array{for: string, id: string}} $memory from memory()
+     * @param ?array $file files.get (CHECK_FIELDS) of $configured, or when blank of auto_folder_id; null for 404 or not looked up
+     * @param ?array $replacement files.get of memory's replacement; null for none or 404
+     * @param string $driveName the folder's Shared Drive name, '' if unknown
+     * @param string $email the account's Google identity ('' falls back to $account)
+     * @param ?\Throwable $error what the lookups (or the account) threw instead
+     * @param string $authUrl the Google Drive Auth settings page
+     * @return array{0: string, 1: string} [✔|⚠|✘|•, Markdown with every outside value cleaned]
+     */
+    public static function folderVerdict(string $configured, array $memory, ?array $file, ?array $replacement, string $driveName, bool $recreate, bool $serviceAccount, string $account, string $email, string $site, ?\Throwable $error = null, string $authUrl = ''): array
+    {
+        $q = static fn (mixed $s): string => '"' . self::clean((string) $s) . '"';
+        $who = '`' . str_replace(['`', "\r", "\n", '<', '>'], '', $email !== '' ? $email : $account) . '`';
+        $own = $q(self::folderName($site));
+        $auth = $authUrl !== '' ? "[Google Drive Auth]({$authUrl})" : '**Google Drive Auth**';
+
+        if ($configured === '' && $serviceAccount) {
+            return ['✘', "Service accounts have no My Drive: set a folder in a Shared Drive shared with {$who} as **Content manager**."];
+        }
+        if ($error !== null) {
+            $reason = $error instanceof DriveException ? $error->reason : '';
+            $anchor = $error instanceof DriveException ? $error->anchor() : '';
+            $message = self::clean((string) preg_replace('/^gdrive:\s*/', '', $error->getMessage()));
+
+            return match ($reason) {
+                'transport' => ['•', "Couldn't reach Google to check the folder right now."],
+                'scope_not_granted' => ['✘', ($configured === '' ? 'Needs `drive.file` access' : 'Needs `drive` access to use a folder you picked') . ": click **Reconnect** on {$auth}."],
+                'not_connected' => ['✘', "The account isn't connected yet: click **Connect** on {$auth}."],
+                'unknown_account' => ['✘', 'No account named **' . self::clean($account) . "** yet: add it on {$auth}."],
+                default => ['✘', "Couldn't check the folder: " . (mb_strlen($message) > 160 ? mb_substr($message, 0, 159) . '…' : $message)
+                    . ($anchor !== '' && $authUrl !== '' ? " ([how to fix]({$authUrl}#troubleshooting--{$anchor}))" : '')],
+            };
+        }
+
+        if ($configured === '') {
+            if ($memory['auto_folder_id'] === '') {
+                return ['✔', "Will create {$own} in {$who}'s My Drive on the first sync."];
+            }
+            if ($file !== null && empty($file['trashed'])) {
+                return ['✔', 'Backing up to ' . $q($file['name'] ?? '') . ' in My Drive.'];
+            }
+
+            return $recreate
+                ? ['⚠', 'The backup folder is in the trash or gone; the next sync creates a new one.']
+                : ['✘', 'The backup folder is in the trash or gone; the next sync will stop. Restore it or turn on **Recreate a missing folder**.'];
+        }
+
+        if ($file !== null && empty($file['trashed'])) {
+            $shared = (string) ($file['driveId'] ?? '') !== '';
+            $caps = (array) ($file['capabilities'] ?? []);
+            $name = $q($file['name'] ?? '');
+            if (($caps['canAddChildren'] ?? null) === false) {
+                return ['✘', "This account can only view {$name}. Share it as **Editor** (My Drive) or **Content manager** (Shared Drive)."];
+            }
+            // Only in a Shared Drive: in My Drive the account owns what it uploads, so it can trash those regardless.
+            if ($shared && ($caps['canTrashChildren'] ?? null) === false) {
+                return ['⚠', "Uploads will work, but old copies can't be moved to the trash (retention). Share it as **Content manager**."];
+            }
+            $where = !$shared ? 'in My Drive' : ($driveName !== '' ? 'in Shared Drive ' . $q($driveName) : 'in a Shared Drive');
+
+            return ['✔', "{$name} {$where}: can add and remove backups."];
+        }
+
+        $lead = $file !== null ? 'Your folder is in the trash' : "{$who} can't see that folder";
+        $rep = $memory['replacement'];
+        if ($rep !== null && $rep['for'] === $configured && $replacement !== null && empty($replacement['trashed'])) {
+            return ['⚠', "{$lead}; backups go to the replacement " . $q($replacement['name'] ?? '') . '. Update the Drive folder setting.'];
+        }
+        $fallback = $recreate && !$serviceAccount ? "the next sync backs up to {$own} in My Drive instead." : 'the next sync will stop.';
+        if ($file !== null) {
+            if (!$recreate) {
+                return ['✘', "{$lead}; the next sync will stop. Restore it or choose another, or turn on **Recreate a missing folder**."];
+            }
+            if ((string) ($file['parents'][0] ?? '') !== '') {
+                return ['⚠', "{$lead}; the next sync creates a replacement beside it."];
+            }
+
+            return [$serviceAccount ? '✘' : '⚠', "{$lead}; {$fallback}"]; // nowhere to put one beside it: as if gone
+        }
+
+        return ['✘', "{$lead}: check the link, and share it with that account; {$fallback}"];
+    }
+
+    /** A value from Drive or config going into Markdown as text: no markup, no code-span or link breakouts. Pure. */
+    private static function clean(string $s): string
+    {
+        return trim((string) preg_replace('/[<>`\[\]*_|\\\\\r\n]/', '', $s));
+    }
+
+    /**
+     * files.get, or null when Drive says 404 (gone, or not shared with this account).
+     *
+     * @internal also used by the settings page's folder check
+     */
+    public static function file(Drive $drive, string $id, string $fields): ?array
     {
         try {
             return $drive->request('GET', '/files/' . rawurlencode($id), ['fields' => $fields]);

@@ -18,7 +18,7 @@ use RocketTheme\Toolbox\Event\Event;
  */
 class GdriveBackupPlugin extends Plugin
 {
-    public const VERSION = '0.1.7';
+    public const VERSION = '0.1.8';
     public const JOB = 'gdrive-backup-sync';
 
     private static bool $warnedMissing = false;
@@ -42,6 +42,7 @@ class GdriveBackupPlugin extends Plugin
         self::registerAutoload();
         // Admin2 may resolve data-*@ through the API's /data/resolve, which only calls allowlisted providers.
         \Grav\Common\Data\Blueprint::addAllowedDynamicCallable(Status::class . '::folderHelp');
+        \Grav\Common\Data\Blueprint::addAllowedDynamicCallable(Status::class . '::folderCheck');
     }
 
     /** Idempotent spl fallback so a git clone into user/plugins works without Composer. */

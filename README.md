@@ -7,7 +7,7 @@ yearly generations. It's modelled on the Home Assistant add-on
 
 Requires PHP 8.3+, Grav 2.0.23+ and the
 [gdrive](https://github.com/sandymac/grav-plugin-gdrive) library plugin
-(0.1.8+), which holds the Google accounts. No Composer dependencies.
+(0.1.11+), which holds the Google accounts. No Composer dependencies.
 
 ## What it does
 
@@ -56,6 +56,14 @@ plugin only manages Drive.
      shared with the service account as **Content Manager** (service accounts
      have no storage of their own).
    Changing the mode changes the scope, so reconnect OAuth accounts afterwards.
+
+Under **Drive folder** a one-line check says what the next sync will do with
+the *saved* settings: the folder it will create, or the folder's name, where
+it is and whether the account can add and remove backups there (✔), or what
+to fix (view-only, needs **Content manager** for retention, trashed, not
+shared, not connected, scope not granted). It runs when the page loads, with
+a 5-second limit and no retries, and is cached for 5 minutes (a sync that
+changes the folder, or a change to the settings or account, refreshes it).
 
 ### If the folder is trashed or gone
 

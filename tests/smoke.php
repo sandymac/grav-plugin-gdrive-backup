@@ -344,6 +344,54 @@ check(Sync::memory(['folder_id' => 'X', 'auto_folder_id' => ''], '') === ['auto_
 
 check(count($allCalls) > 30 && array_filter($allCalls, static fn (array $c): bool => $c[0] === 'DELETE' || $c[0] === 'PATCH' || ($c[2]['trashed'] ?? null) === false) === [], 'folder resolution never deletes, patches or untrashes anything');
 
+// --- Folder check: the settings page's line, branch for branch with resolveFolder().
+$auth = 'https://example.com/admin/plugins/gdrive';
+$verdict = static fn (string $configured = 'CFG', array $status = [], ?array $file = null, ?array $rep = null, string $driveName = '', bool $recreate = true, bool $sa = false, ?\Throwable $error = null): array
+    => Sync::folderVerdict($configured, Sync::memory($status, $configured), $file, $rep, $driveName, $recreate, $sa, 'personal', $sa ? 'svc@p.iam.gserviceaccount.com' : 'me@example.com', 'example.com', $error, $auth);
+$f = static fn (string $name, array $extra = []): array => $extra + ['id' => 'CFG', 'name' => $name, 'trashed' => false, 'parents' => ['root'], 'capabilities' => ['canAddChildren' => true, 'canTrashChildren' => true]];
+$shared = ['driveId' => '0ASD', 'parents' => ['0ASD']];
+$withRep = ['replacement' => ['for' => 'CFG', 'id' => 'REP']];
+$cases = [
+    'blank, first sync' => [$verdict(''), ['✔', 'Will create "Grav backups (example.com)" in `me@example.com`\'s My Drive on the first sync.']],
+    'blank, service account' => [$verdict('', [], null, null, '', true, true), ['✘', 'Service accounts have no My Drive: set a folder in a Shared Drive shared with `svc@p.iam.gserviceaccount.com` as **Content manager**.']],
+    'blank, service account wins over an auto folder' => [$verdict('', ['auto_folder_id' => 'AUTO'], $f('x'), null, '', true, true)[0], '✘'],
+    'blank, own folder alive' => [$verdict('', ['auto_folder_id' => 'AUTO'], $f('Grav backups (example.com)')), ['✔', 'Backing up to "Grav backups (example.com)" in My Drive.']],
+    'blank, own folder trashed + recreate' => [$verdict('', ['auto_folder_id' => 'AUTO'], $f('x', ['trashed' => true])), ['⚠', 'The backup folder is in the trash or gone; the next sync creates a new one.']],
+    'blank, own folder gone + recreate off' => [$verdict('', ['auto_folder_id' => 'AUTO'], null, null, '', false), ['✘', 'The backup folder is in the trash or gone; the next sync will stop. Restore it or turn on **Recreate a missing folder**.']],
+    'set, My Drive, OK' => [$verdict('CFG', [], $f('Backups')), ['✔', '"Backups" in My Drive: can add and remove backups.']],
+    'set, Shared Drive, OK' => [$verdict('CFG', [], $f('Backups', $shared), null, 'Team'), ['✔', '"Backups" in Shared Drive "Team": can add and remove backups.']],
+    'set, Shared Drive, name lookup failed' => [$verdict('CFG', [], $f('Backups', $shared))[1], '"Backups" in a Shared Drive: can add and remove backups.'],
+    'set, Shared Drive, Contributor' => [$verdict('CFG', [], $f('Backups', $shared + ['capabilities' => ['canAddChildren' => true, 'canTrashChildren' => false]])), ['⚠', "Uploads will work, but old copies can't be moved to the trash (retention). Share it as **Content manager**."]],
+    'set, My Drive, canTrashChildren false is fine' => [$verdict('CFG', [], $f('Backups', ['capabilities' => ['canAddChildren' => true, 'canTrashChildren' => false]]))[0], '✔'],
+    'set, view only' => [$verdict('CFG', [], $f('Backups', $shared + ['capabilities' => ['canAddChildren' => false, 'canTrashChildren' => false]])), ['✘', 'This account can only view "Backups". Share it as **Editor** (My Drive) or **Content manager** (Shared Drive).']],
+    'set, trashed + live replacement' => [$verdict('CFG', $withRep, $f('Backups', ['trashed' => true]), $f('Backups', ['id' => 'REP']), '', false), ['⚠', 'Your folder is in the trash; backups go to the replacement "Backups". Update the Drive folder setting.']],
+    'set, trashed + another folder\'s replacement' => [$verdict('CFG', ['replacement' => ['for' => 'OTHER', 'id' => 'REP']], $f('Backups', ['trashed' => true]), $f('Backups', ['id' => 'REP']), '', false)[0], '✘'],
+    'set, trashed + trashed replacement + recreate' => [$verdict('CFG', $withRep, $f('Backups', ['trashed' => true]), $f('Backups', ['id' => 'REP', 'trashed' => true])), ['⚠', 'Your folder is in the trash; the next sync creates a replacement beside it.']],
+    'set, trashed + recreate off' => [$verdict('CFG', [], $f('Backups', ['trashed' => true]), null, '', false), ['✘', 'Your folder is in the trash; the next sync will stop. Restore it or choose another, or turn on **Recreate a missing folder**.']],
+    'set, trashed, no parent, OAuth' => [$verdict('CFG', [], $f('Backups', ['trashed' => true, 'parents' => []])), ['⚠', 'Your folder is in the trash; the next sync backs up to "Grav backups (example.com)" in My Drive instead.']],
+    'set, trashed, no parent, service account' => [$verdict('CFG', [], $f('Backups', ['trashed' => true, 'parents' => []]), null, '', true, true), ['✘', 'Your folder is in the trash; the next sync will stop.']],
+    'set, 404 + OAuth + recreate' => [$verdict('CFG'), ['✘', "`me@example.com` can't see that folder: check the link, and share it with that account; the next sync backs up to \"Grav backups (example.com)\" in My Drive instead."]],
+    'set, 404 + recreate off' => [$verdict('CFG', [], null, null, '', false)[1], "`me@example.com` can't see that folder: check the link, and share it with that account; the next sync will stop."],
+    'set, 404 + service account' => [$verdict('CFG', [], null, null, '', true, true)[1], "`svc@p.iam.gserviceaccount.com` can't see that folder: check the link, and share it with that account; the next sync will stop."],
+    'set, 404 + live replacement' => [$verdict('CFG', $withRep, null, $f('Grav backups (example.com)', ['id' => 'REP'])), ['⚠', "`me@example.com` can't see that folder; backups go to the replacement \"Grav backups (example.com)\". Update the Drive folder setting."]],
+    'scope, set' => [$verdict('CFG', [], null, null, '', true, false, new DriveException('x', 'scope_not_granted')), ['✘', "Needs `drive` access to use a folder you picked: click **Reconnect** on [Google Drive Auth]({$auth})."]],
+    'scope, blank' => [$verdict('', [], null, null, '', true, false, new DriveException('x', 'scope_not_granted'))[1], "Needs `drive.file` access: click **Reconnect** on [Google Drive Auth]({$auth})."],
+    'not connected' => [$verdict('CFG', [], null, null, '', true, false, new DriveException('x', 'not_connected')), ['✘', "The account isn't connected yet: click **Connect** on [Google Drive Auth]({$auth})."]],
+    'unknown account' => [$verdict('CFG', [], null, null, '', true, false, new DriveException('x', 'unknown_account')), ['✘', "No account named **personal** yet: add it on [Google Drive Auth]({$auth})."]],
+    'other Drive error' => [$verdict('CFG', [], null, null, '', true, false, DriveException::fromResponse(403, '{"error":{"errors":[{"reason":"accessNotConfigured"}],"message":"Drive API is off"}}', 'GET /files/CFG')), ['✘', "Couldn't check the folder: GET /files/CFG failed (HTTP 403) accessNotConfigured: Drive API is off ([how to fix]({$auth}#troubleshooting--access-not-configured))"]],
+    'transport' => [$verdict('CFG', [], null, null, '', true, false, new DriveException('timed out', 'transport')), ['•', "Couldn't reach Google to check the folder right now."]],
+];
+foreach ($cases as $what => [$got, $want]) {
+    check($got === $want, "folderVerdict(), {$what}: got " . json_encode($got, JSON_UNESCAPED_UNICODE));
+}
+$evil = $verdict('CFG', [], $f('<script>x</script> `a` [l](j:x) *b* _c_ |d| \\e'), null, '<div id="z">')[1];
+check(!str_contains($evil, '<') && !str_contains($evil, '`') && !str_contains($evil, '[') && !str_contains($evil, '*') && !str_contains($evil, '_') && !str_contains($evil, '|') && !str_contains($evil, '\\'), 'folderVerdict() strips markup from Drive names: ' . $evil);
+$evil = Sync::folderVerdict('', ['auto_folder_id' => '', 'replacement' => null], null, null, '', true, false, 'p', "a`b\n<script>@x", 'ex_<a>', null, $auth)[1];
+check(substr_count($evil, '`') === 2 && !str_contains($evil, '<'), 'folderVerdict(): an email cannot break out of its code span, the site cannot inject tags: ' . $evil);
+$long = $verdict('CFG', [], null, null, '', true, false, new \RuntimeException(str_repeat('é', 400)))[1];
+check(mb_strlen($long) < 220 && !str_contains($long, 'how to fix'), 'folderVerdict(): a long non-Drive error is shortened, with no fix link');
+check(Status::folderCheck() === "• Couldn't check the folder right now.", 'folderCheck() without Grav: a neutral line, not an exception');
+
 // --- Folder setting: a bare id or any Drive folder link the owner pastes.
 $id = '1LwqGziKeXXdo1T5y4q3dqEuAehSGCuAT';
 foreach ([
