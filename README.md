@@ -132,9 +132,9 @@ it; once it's trashed, gone or empty of backups the plugin forgets it.
 ## Your Google sign-in is in the backups
 
 Grav's default backup profile archives `user/`, which includes
-`user/data/gdrive/`: the site's Google refresh token, OAuth client secret or
+`user/data/gdrive/auth/`: the site's Google refresh token, OAuth client secret or
 service-account key. Anyone who can open a backup zip can use it to reach your
-Google Drive. Keep the Drive folder private, or add `/user/data/gdrive` to the
+Google Drive. Keep the Drive folder private, or add `/user/data/gdrive/auth` to the
 profile's **Exclude paths** in **Configuration → Backups** (you'll then
 reconnect Google after restoring). The scheduled-profiles line on the settings
 page warns while an active profile includes it.

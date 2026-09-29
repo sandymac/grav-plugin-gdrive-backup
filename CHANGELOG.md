@@ -1,3 +1,9 @@
+# v0.1.14
+## 2026-09-29
+
+1. [](#improved)
+    * Follows Google Drive Auth 0.1.15, which keeps its credentials in `user/data/gdrive/auth/`: the sign-in warning and the README now say to exclude `/user/data/gdrive/auth` (an existing `/user/data/gdrive` exclusion still covers it). Requires gdrive-auth 0.1.15+.
+
 # v0.1.13
 ## 2026-09-29
 

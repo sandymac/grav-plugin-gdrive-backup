@@ -102,7 +102,7 @@ final class Status
     }
 
     /**
-     * Whether a backup profile's zip holds user/data/gdrive (the site's Google
+     * Whether a backup profile's zip holds user/data/gdrive/auth (the site's Google
      * refresh token, client secret, service-account key). Same matching as Grav's
      * Backups::convertExclude() and RecursiveDirectoryFilterIterator: paths are
      * relative to the profile root, split on newlines (CRLF too), commas or 2+
@@ -110,7 +110,7 @@ final class Status
      */
     public static function includesSignIn(string $root, string $excludePaths): bool
     {
-        $rel = 'user/data/gdrive';
+        $rel = 'user/data/gdrive/auth';
         $root = trim(str_replace('user://', 'user/', trim($root)), '/');
         if ($root !== '') {
             if ($rel !== $root && !str_starts_with($rel, $root . '/')) {
@@ -152,8 +152,8 @@ final class Status
         $names = array_flip(array_column($active, 0));
         $exposed = array_filter($profiles, static fn (mixed $p): bool => is_array($p) && ($active === [] || isset($names[(string) ($p['name'] ?? '')]))
             && self::includesSignIn((string) ($p['root'] ?? '/'), (string) ($p['exclude_paths'] ?? '')));
-        $signIn = $exposed === [] ? '' : "\n\n⚠ These backups include this site's Google sign-in (`user/data/gdrive/`), so anyone who can open a backup zip can reach your Google Drive."
-            . " Keep the Drive folder private, or add `/user/data/gdrive` to the profile's **Exclude paths** in {$where} (you'd then reconnect Google after restoring).";
+        $signIn = $exposed === [] ? '' : "\n\n⚠ These backups include this site's Google sign-in (`user/data/gdrive/auth/`), so anyone who can open a backup zip can reach your Google Drive."
+            . " Keep the Drive folder private, or add `/user/data/gdrive/auth` to the profile's **Exclude paths** in {$where} (you'd then reconnect Google after restoring).";
 
         return "Grav makes the backups; this plugin uploads them. Set up what's backed up, and when, in {$where}. {$state}{$signIn}";
     }
