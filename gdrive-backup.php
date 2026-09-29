@@ -18,7 +18,7 @@ use RocketTheme\Toolbox\Event\Event;
  */
 class GdriveBackupPlugin extends Plugin
 {
-    public const VERSION = '0.1.11';
+    public const VERSION = '0.1.12';
     public const JOB = 'gdrive-backup-sync';
 
     private static bool $warnedMissing = false;
@@ -103,10 +103,10 @@ class GdriveBackupPlugin extends Plugin
         if (!class_exists(Drive::class)) {
             if (!self::$warnedMissing) {
                 self::$warnedMissing = true;
-                $log->warning('gdrive-backup: the gdrive plugin is missing or disabled; nothing synced');
+                $log->warning('gdrive-backup: the Google Drive Auth (gdrive-auth) plugin is missing or disabled; nothing synced');
             }
 
-            return 'gdrive-backup: gdrive plugin missing or disabled';
+            return 'gdrive-backup: Google Drive Auth (gdrive-auth) plugin missing or disabled';
         }
 
         $summary = Sync::locked(Status::dir() . '/sync.lock', function (): string {
@@ -118,7 +118,7 @@ class GdriveBackupPlugin extends Plugin
                 $site = Status::site();
                 $account = (string) ($config['account'] ?? 'personal');
                 $drive = Gdrive::drive($account, [$folder === '' ? Drive::SCOPE_FILE : Drive::SCOPE_FULL]);
-                $sa = $this->config->get("plugins.gdrive.accounts.{$account}.type") === 'service_account';
+                $sa = $this->config->get("plugins.gdrive-auth.accounts.{$account}.type") === 'service_account';
                 $resolved = Sync::resolveFolder($drive, $folder, $status, $site, (bool) ($config['recreate_folder'] ?? true), $sa, $account);
                 $status = ['folder_id' => $resolved['id']] + $resolved['status'];
                 if ($resolved['warning'] !== null) {

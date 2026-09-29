@@ -1,3 +1,9 @@
+# v0.1.12
+## 2026-09-29
+
+1. [](#improved)
+    * Depends on the renamed library plugin Google Drive Auth (`gdrive-auth`, 0.1.13+; was `gdrive`), and links to its settings page at `/plugins/gdrive-auth`. Upgrade: install `gdrive-auth` and rename `user/config/plugins/gdrive.yaml` to `gdrive-auth.yaml` (see its changelog).
+
 # v0.1.11
 ## 2026-09-29
 

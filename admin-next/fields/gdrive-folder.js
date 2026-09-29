@@ -135,7 +135,7 @@ ${label ? `<label for="f">${esc(label)}</label>` : ''}
         if (covers(Array.isArray(a.scopes) ? a.scopes : [], SCOPE + (hasFolder ? 'drive' : 'drive.file'))) return '';
         if (!hasFolder) return '';  // a connected account without even drive.file: the folder-check line covers it
         const base = window.location.pathname.split('/plugins/')[0];
-        return `⚠ Using a folder you picked needs full Drive access (<code>drive</code>), which <strong>${n}</strong> hasn’t granted yet. Save, then click <strong>Reconnect</strong> on <a href="${esc(base)}/plugins/gdrive">Google Drive Auth → Accounts</a> and approve full access.`;
+        return `⚠ Using a folder you picked needs full Drive access (<code>drive</code>), which <strong>${n}</strong> hasn’t granted yet. Save, then click <strong>Reconnect</strong> on <a href="${esc(base)}/plugins/gdrive-auth">Google Drive Auth → Accounts</a> and approve full access.`;
     }
 }
 

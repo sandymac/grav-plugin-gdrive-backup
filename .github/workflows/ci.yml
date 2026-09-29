@@ -15,10 +15,10 @@ jobs:
       - uses: actions/checkout@v5
 
       # The gdrive library is a private repo. GDRIVE_LIB_TOKEN is a fine-grained
-      # PAT with read access (Contents: read) to sandymac/grav-plugin-gdrive only.
+      # PAT with read access (Contents: read) to sandymac/grav-plugin-gdrive-auth only.
       - uses: actions/checkout@v5
         with:
-          repository: sandymac/grav-plugin-gdrive
+          repository: sandymac/grav-plugin-gdrive-auth
           path: lib
           token: ${{ secrets.GDRIVE_LIB_TOKEN }}
 
@@ -47,7 +47,7 @@ jobs:
       # See the test job: fine-grained PAT, read access to the library only.
       - uses: actions/checkout@v5
         with:
-          repository: sandymac/grav-plugin-gdrive
+          repository: sandymac/grav-plugin-gdrive-auth
           path: lib
           token: ${{ secrets.GDRIVE_LIB_TOKEN }}
 
@@ -57,12 +57,12 @@ jobs:
           tools: phpstan
 
       # phpstan.neon resolves Grav symbols from a real install at
-      # .gravtest/grav-admin and the library from ../grav-plugin-gdrive —
+      # .gravtest/grav-admin and the library from ../grav-plugin-gdrive-auth —
       # recreate the local dev layout. Vendors are for symbol scanning only,
       # hence --ignore-platform-reqs.
       - run: |
           git clone --depth 1 -b 2.0.23 https://github.com/getgrav/grav .gravtest/grav-admin
           composer install -q -d .gravtest/grav-admin --no-dev --ignore-platform-reqs
-          ln -s "$PWD/$GDRIVE_LIB" ../grav-plugin-gdrive
+          ln -s "$PWD/$GDRIVE_LIB" ../grav-plugin-gdrive-auth
 
       - run: phpstan analyse --memory-limit=1G

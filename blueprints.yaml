@@ -1,7 +1,7 @@
 name: Google Drive Backup
 slug: gdrive-backup
 type: plugin
-version: 0.1.11
+version: 0.1.12
 description: Uploads Grav backups to Google Drive after they're made and keeps the newest N there, plus optional daily, weekly, monthly and yearly generations. Starred copies are never touched; old ones go to Drive's trash.
 icon: cloud-upload
 author:
@@ -17,7 +17,7 @@ compatibility:
 
 dependencies:
   - { name: grav, version: ">=2.0.23" }
-  - { name: gdrive, version: '>=0.1.11' }
+  - { name: gdrive-auth, version: '>=0.1.13' }
 
 form:
   validation: loose

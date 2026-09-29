@@ -2,7 +2,7 @@
 
 A Grav CMS plugin (PHP 8.3+, Grav 2.0.23+) that uploads Grav backups to Google
 Drive with HA-add-on-style retention. It depends on the shared library plugin
-`gdrive` (`C:\dev\grav-plugin-gdrive`, `Gdrive::drive()`); read that repo's
+Google Drive Auth (`gdrive-auth`, `C:\dev\grav-plugin-gdrive-auth`, `Gdrive::drive()`); read that repo's
 README "Public API" before using anything from it, and don't use anything
 not listed there.
 
@@ -51,7 +51,7 @@ decisions in §1 are settled.
 ## Tooling
 
 No local PHP. Run it via Docker from Git Bash, mounting `C:\dev` so the
-library at `../grav-plugin-gdrive` resolves (not at `/dev`, which would hide
+library at `../grav-plugin-gdrive-auth` resolves (not at `/dev`, which would hide
 the container's own `/dev`):
 
 ```

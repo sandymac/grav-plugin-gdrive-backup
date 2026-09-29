@@ -7,10 +7,10 @@ declare(strict_types=1);
  * upload-only-survivors rule, the starred/untagged/trash-only invariants, the
  * md5 check or the lock breaks. Drive is the real library client over a fake
  * in-memory transport; no network, no Grav install.
- * Run: php tests/smoke.php   (GDRIVE_LIB points at the gdrive library; default ../grav-plugin-gdrive)
+ * Run: php tests/smoke.php   (GDRIVE_LIB points at the gdrive library; default ../grav-plugin-gdrive-auth)
  */
 
-$lib = rtrim(getenv('GDRIVE_LIB') ?: __DIR__ . '/../../grav-plugin-gdrive', '/\\');
+$lib = rtrim(getenv('GDRIVE_LIB') ?: __DIR__ . '/../../grav-plugin-gdrive-auth', '/\\');
 spl_autoload_register(static function (string $class) use ($lib): void {
     foreach (['Grav\\Plugin\\GdriveBackup\\' => __DIR__ . '/../classes/', 'Grav\\Plugin\\Gdrive\\' => $lib . '/classes/'] as $prefix => $dir) {
         if (str_starts_with($class, $prefix) && is_file($path = $dir . substr($class, strlen($prefix)) . '.php')) {
@@ -422,7 +422,7 @@ check(Sync::memory(['folder_id' => 'X', 'auto_folder_id' => ''], '') === ['auto_
 check(count($allCalls) > 30 && array_filter($allCalls, static fn (array $c): bool => $c[0] === 'DELETE' || $c[0] === 'PATCH' || ($c[2]['trashed'] ?? null) === false) === [], 'folder resolution never deletes, patches or untrashes anything');
 
 // --- Folder check: the settings page's line, branch for branch with resolveFolder().
-$auth = 'https://example.com/admin/plugins/gdrive';
+$auth = 'https://example.com/admin/plugins/gdrive-auth';
 $verdict = static fn (string $configured = 'CFG', array $status = [], ?array $file = null, ?array $rep = null, string $driveName = '', bool $recreate = true, bool $sa = false, ?\Throwable $error = null): array
     => Sync::folderVerdict($configured, Sync::memory($status, $configured), $file, $rep, $driveName, $recreate, $sa, 'personal', $sa ? 'svc@p.iam.gserviceaccount.com' : 'me@example.com', 'example.com', $error, $auth);
 $f = static fn (string $name, array $extra = []): array => $extra + ['id' => 'CFG', 'name' => $name, 'trashed' => false, 'parents' => ['root'], 'capabilities' => ['canAddChildren' => true, 'canTrashChildren' => true]];

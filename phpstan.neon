@@ -13,4 +13,4 @@ parameters:
     bootstrapFiles:
         - .gravtest/grav-admin/vendor/autoload.php
     scanDirectories:
-        - ../grav-plugin-gdrive/classes
+        - ../grav-plugin-gdrive-auth/classes

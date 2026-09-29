@@ -186,11 +186,11 @@ final class Status
         $account = (string) $config->get('plugins.gdrive-backup.account', 'personal');
         $configured = Sync::folderId((string) $config->get('plugins.gdrive-backup.folder', ''));
         $recreate = (bool) $config->get('plugins.gdrive-backup.recreate_folder', true);
-        $sa = $config->get("plugins.gdrive.accounts.{$account}.type") === 'service_account';
+        $sa = $config->get("plugins.gdrive-auth.accounts.{$account}.type") === 'service_account';
         $memory = Sync::memory(self::read(), $configured);
         $site = self::site();
         $scopes = [$configured === '' ? Drive::SCOPE_FILE : Drive::SCOPE_FULL];
-        $authUrl = self::adminUrl('plugins/gdrive');
+        $authUrl = self::adminUrl('plugins/gdrive-auth');
         $accounts = Gdrive::accounts();
         try {
             $state = $accounts->status($account); // local only: connected, email, granted scopes
@@ -262,7 +262,7 @@ final class Status
         return $line;
     }
 
-    /** An Admin2 page's URL, e.g. adminUrl('plugins/gdrive'). */
+    /** An Admin2 page's URL, e.g. adminUrl('plugins/gdrive-auth'). */
     private static function adminUrl(string $path): string
     {
         $grav = Grav::instance();

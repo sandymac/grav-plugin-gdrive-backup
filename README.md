@@ -6,8 +6,8 @@ yearly generations. It's modelled on the Home Assistant add-on
 [hassio-google-drive-backup](https://github.com/sabeechen/hassio-google-drive-backup).
 
 Requires PHP 8.3+, Grav 2.0.23+ and the
-[gdrive](https://github.com/sandymac/grav-plugin-gdrive) library plugin
-(0.1.11+), which holds the Google accounts. No Composer dependencies.
+[Google Drive Auth](https://github.com/sandymac/grav-plugin-gdrive-auth) (`gdrive-auth`) library plugin
+(0.1.13+), which holds the Google accounts. No Composer dependencies.
 
 ## What it does
 
@@ -41,7 +41,7 @@ plugin only manages Drive.
 
 ## Setup
 
-1. Install and enable **gdrive** and **gdrive-backup** (`user/plugins/gdrive`
+1. Install and enable **gdrive-auth** and **gdrive-backup** (`user/plugins/gdrive-auth`
    and `user/plugins/gdrive-backup`).
 2. On the **Google Drive Auth** plugin's settings page, create an account and
    follow its guide. The guide lists the scope this plugin needs.
@@ -147,8 +147,8 @@ Grav install, as with any Grav backup.
 ## Development
 
 ```
-php tests/smoke.php                          # GDRIVE_LIB=path/to/grav-plugin-gdrive, default ../grav-plugin-gdrive
-phpstan analyse --memory-limit=1G           # needs .gravtest/grav-admin and ../grav-plugin-gdrive
+php tests/smoke.php                          # GDRIVE_LIB=path/to/grav-plugin-gdrive-auth, default ../grav-plugin-gdrive-auth
+phpstan analyse --memory-limit=1G           # needs .gravtest/grav-admin and ../grav-plugin-gdrive-auth
 ```
 
 ## License
