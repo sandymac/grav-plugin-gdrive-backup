@@ -1,3 +1,9 @@
+# v0.1.6
+## 2026-09-29
+
+1. [](#improved)
+    * A line under **Last sync** says Grav itself makes the backups, links to **Configuration → Backups**, and says how many backup profiles are scheduled (and when).
+
 # v0.1.5
 ## 2026-09-29
 

@@ -60,6 +60,55 @@ final class Status
             . ' Service accounts have no My Drive, so they must use a folder in a Shared Drive, shared with the service account as Content Manager.';
     }
 
+    /**
+     * The backup profiles whose scheduler job is on, as [name, schedule_at]. Same rule
+     * as Grav core: an Enabled/Disabled toggle in scheduler.status wins, else the
+     * profile's own `schedule` flag. Pure.
+     *
+     * @param array<int, array<string, mixed>> $profiles backups.profiles
+     * @param array<string, mixed> $toggles scheduler.status
+     * @param callable(string): string $jobName profile name → scheduler job id (Grav's Inflector::hyphenize)
+     * @return array<int, array{0: string, 1: string}>
+     */
+    public static function activeProfiles(array $profiles, array $toggles, callable $jobName): array
+    {
+        $active = [];
+        foreach ($profiles as $p) {
+            $name = (string) ($p['name'] ?? '');
+            $job = $jobName($name);
+            if (isset($toggles[$job]) ? $toggles[$job] !== 'disabled' : !empty($p['schedule'])) {
+                $active[] = [$name, (string) ($p['schedule_at'] ?? '')];
+            }
+        }
+
+        return $active;
+    }
+
+    /** data-content@ for the line saying Grav itself makes the backups, and where that's set up. */
+    public static function profilesNotice(): string
+    {
+        $clean = static fn (string $s): string => (string) preg_replace('/[<>`|*_\[\]\r\n]/', '', $s);
+        $where = '**Configuration → Backups**';
+        try {
+            $grav = Grav::instance();
+            $route = trim((string) $grav['config']->get('plugins.admin2.route', '/admin'), '/');
+            $where = sprintf('[%s](%s/%s/config/backups)', $where, rtrim((string) $grav['uri']->rootUrl(false), '/'), $route);
+            $profiles = array_values((array) $grav['config']->get('backups.profiles', []));
+            $active = self::activeProfiles($profiles, (array) $grav['config']->get('scheduler.status', []), [\Grav\Common\Inflector::class, 'hyphenize']);
+        } catch (\Throwable) {
+            return "Grav makes the backups; this plugin uploads them. Set up what's backed up, and when, in {$where}.";
+        }
+        $list = implode(', ', array_map(static fn (array $a): string => $clean($a[0]) . ($a[1] !== '' ? ' (`' . $clean($a[1]) . '`)' : ''), $active));
+        $count = count($profiles);
+        $state = match (true) {
+            $count === 0 => 'There are no backup profiles yet.',
+            $active === [] => sprintf('None of the %d backup profile%s is scheduled, so only backups made with **Backup now** reach Drive.', $count, $count === 1 ? '' : 's'),
+            default => sprintf('**%d of %d** backup profile%s scheduled: %s.', count($active), $count, count($active) === 1 ? ' is' : 's are', $list),
+        };
+
+        return "Grav makes the backups; this plugin uploads them. Set up what's backed up, and when, in {$where}. {$state}";
+    }
+
     /** data-content@ renderer for the blueprint's "Last sync" display field. */
     public static function markdown(): string
     {

@@ -23,6 +23,7 @@ use Grav\Plugin\Gdrive\Credentials;
 use Grav\Plugin\Gdrive\Drive;
 use Grav\Plugin\Gdrive\DriveException;
 use Grav\Plugin\GdriveBackup\Retention;
+use Grav\Plugin\GdriveBackup\Status;
 use Grav\Plugin\GdriveBackup\Sync;
 
 function check(bool $ok, string $what): void
@@ -360,6 +361,19 @@ check(Sync::folderId('https://drive.google.com/drive/folders/0AK0-ofF-eHHHUk9PVA
 check(Sync::folderName('example.com') === 'Grav backups (example.com)', 'folderName() is the one place the folder name is built');
 $help = \Grav\Plugin\GdriveBackup\Status::folderHelp(); // no Grav here: must fall back, not throw
 check(str_contains($help, 'Grav backups') && !str_contains($help, '<') && !str_contains($help, '()'), 'folderHelp() falls back to words without Grav, with no tag-like text Admin2 would strip');
+
+// --- Which backup profiles are scheduled: a scheduler toggle wins, else the profile's schedule flag.
+$hyph = static fn (string $n): string => strtolower(trim((string) preg_replace('/[^a-z0-9]+/i', '-', $n), '-'));
+$profiles = [
+    ['name' => 'Default Site Backup', 'schedule' => true, 'schedule_at' => '0 3 * * *'],
+    ['name' => 'Pages Only', 'schedule' => false, 'schedule_at' => '0 4 * * 0'],
+    ['name' => 'Media', 'schedule' => true, 'schedule_at' => '0 5 1 * *'],
+];
+check(Status::activeProfiles($profiles, [], $hyph) === [['Default Site Backup', '0 3 * * *'], ['Media', '0 5 1 * *']], 'activeProfiles(): the schedule flag decides when no toggle is set');
+check(Status::activeProfiles($profiles, ['pages-only' => 'enabled', 'media' => 'disabled'], $hyph) === [['Default Site Backup', '0 3 * * *'], ['Pages Only', '0 4 * * 0']], 'activeProfiles(): an Enabled/Disabled toggle overrides the flag');
+check(Status::activeProfiles([], [], $hyph) === [], 'activeProfiles(): no profiles, none active');
+$notice = Status::profilesNotice(); // no Grav here: must fall back, not throw
+check(str_contains($notice, 'Configuration → Backups') && !str_contains($notice, '<'), 'profilesNotice() falls back to plain words without Grav');
 
 // --- Lock: a held lock skips the run.
 $lock = $tmp . '/sync.lock';
