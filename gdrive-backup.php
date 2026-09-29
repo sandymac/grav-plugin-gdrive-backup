@@ -18,7 +18,7 @@ use RocketTheme\Toolbox\Event\Event;
  */
 class GdriveBackupPlugin extends Plugin
 {
-    public const VERSION = '0.1.0';
+    public const VERSION = '0.1.1';
     public const JOB = 'gdrive-backup-sync';
 
     private static bool $warnedMissing = false;
