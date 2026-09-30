@@ -137,7 +137,7 @@ service-account key. Anyone who can open a backup zip can use it to reach your
 Google Drive. Keep the Drive folder private, or add `/user/data/gdrive/auth` to the
 profile's **Exclude paths** in **Configuration → Backups** (you'll then
 reconnect Google after restoring). The scheduled-profiles line on the settings
-page warns while an active profile includes it.
+page warns while an active profile includes it. Only an admin with `api.gdrive.manage` (or `api.super`) can change the account or the folder; a settings save by anyone else keeps the saved ones.
 
 ## Restoring
 

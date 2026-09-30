@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace Grav\Plugin;
 
 use Grav\Common\Backup\Backups;
+use Grav\Common\Data\Data;
 use Grav\Common\Plugin;
+use Grav\Common\User\Interfaces\UserInterface;
+use Grav\Common\Utils;
 use Grav\Plugin\Gdrive\Drive;
 use Grav\Plugin\Gdrive\Gdrive;
 use Grav\Plugin\GdriveBackup\Status;
 use Grav\Plugin\GdriveBackup\Sync;
 use RocketTheme\Toolbox\Event\Event;
+use RocketTheme\Toolbox\File\AbstractFile;
 
 /**
  * Uploads Grav backups to Google Drive and applies retention there. Grav's own
@@ -34,6 +38,7 @@ class GdriveBackupPlugin extends Plugin
             'onSchedulerInitialized' => ['onSchedulerInitialized', 0],
             'onBackupFinished' => ['onBackupFinished', 0],
             'onGdriveScopes' => ['onGdriveScopes', 0],
+            'onAdminSave' => ['onAdminSave', 0],
         ];
     }
 
@@ -75,6 +80,58 @@ class GdriveBackupPlugin extends Plugin
             'account' => (string) $this->config->get('plugins.gdrive-backup.account', 'personal'),
             'scopes' => [$this->folder() === '' ? Drive::SCOPE_FILE : Drive::SCOPE_FULL],
         ]];
+    }
+
+    /**
+     * Where backups go is api.gdrive.manage's call, not api.config.write's: a
+     * config writer could point the site's Google credential at a folder they
+     * control and receive every backup zip (Google keys and password hashes
+     * included). Like gdrive-auth's `accounts`, a change by anyone else is put
+     * back to what's on disk; the fields' help says so.
+     */
+    public function onAdminSave(Event $event): void
+    {
+        $obj = $event['object'] ?? null;
+        $file = $obj instanceof Data ? $obj->file() : null;
+        if (!$file instanceof AbstractFile || !str_ends_with(str_replace('\\', '/', (string) $file->filename()), '/plugins/gdrive-backup.yaml')) {
+            return;
+        }
+        $saved = (array) $this->config->get('plugins.gdrive-backup', []);
+        foreach (Sync::guardTarget($obj->toArray(), $saved, $this->canManageGdrive()) as $key => $value) {
+            $obj->set($key, $value);
+        }
+    }
+
+    /**
+     * api.gdrive.manage (or a parent key, as the api plugin resolves it) or
+     * api.super, for the admin saving the form: $grav['admin']->user under
+     * Admin2 (its AdminProxy) and admin-classic alike. Not User::authorize():
+     * the api plugin's JWT users aren't flagged authenticated, so it says no
+     * to everyone. Same group-then-user lookup otherwise.
+     * ponytail: any grant wins; a user-level deny over a group grant isn't honoured.
+     */
+    private function canManageGdrive(): bool
+    {
+        $user = isset($this->grav['admin']) ? ($this->grav['admin']->user ?? null) : null;
+        if (!$user instanceof UserInterface) {
+            return false;
+        }
+        $config = $this->grav['config'];
+        $granted = static function (string $action) use ($user, $config): bool {
+            $yes = Utils::isPositive($user->get("access.{$action}"));
+            foreach ((array) $user->get('groups') as $group) {
+                $yes = $yes || Utils::isPositive($config->get("groups.{$group}.access.{$action}"));
+            }
+
+            return $yes;
+        };
+        for ($key = 'api.gdrive.manage'; $key !== ''; $key = (string) substr($key, 0, (int) strrpos($key, '.'))) {
+            if ($granted($key)) {
+                return true;
+            }
+        }
+
+        return $granted('api.super');
     }
 
     public function onSchedulerInitialized(Event $e): void
