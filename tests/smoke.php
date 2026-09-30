@@ -492,6 +492,13 @@ foreach ([
 }
 check(Sync::folderId('') === '' && Sync::folderId('   ') === '', 'folderId() keeps empty as empty (plugin makes its own folder)');
 check(Sync::folderId('https://drive.google.com/drive/folders/0AK0-ofF-eHHHUk9PVA') === '0AK0-ofF-eHHHUk9PVA', 'folderId() handles a Shared Drive root link');
+
+// --- guardTarget(): account and folder are api.gdrive.manage's; a settings save by anyone else keeps the saved ones.
+$saved = ['account' => 'site', 'folder' => 'F1', 'keep' => 2];
+check(Sync::guardTarget(['account' => 'other', 'folder' => 'F2', 'keep' => 5], $saved, false) === ['account' => 'site', 'folder' => 'F1'], 'guardTarget() puts account and folder back for a non-manager (keep is theirs to change)');
+check(Sync::guardTarget(['account' => 'other', 'folder' => 'F2'], $saved, true) === [], 'guardTarget() lets a manager change them');
+check(Sync::guardTarget(['account' => 'site', 'folder' => 'F1', 'keep' => 5], $saved, false) === [], 'guardTarget() leaves unchanged keys alone');
+check(Sync::guardTarget(['folder' => 'F2'], ['account' => 'site'], false) === ['account' => 'site', 'folder' => ''], 'guardTarget(): a missing key counts as empty');
 check(Sync::folderName('example.com') === 'Grav backups (example.com)', 'folderName() is the one place the folder name is built');
 $help = \Grav\Plugin\GdriveBackup\Status::folderHelp(); // no Grav here: must fall back, not throw
 check(str_contains($help, 'Grav backups') && !str_contains($help, '<') && !str_contains($help, '()'), 'folderHelp() falls back to words without Grav, with no tag-like text Admin2 would strip');
@@ -516,6 +523,7 @@ check(Status::folderRef('') === 'folder' && Status::folderRef('x) [evil](javascr
 // --- Page editors can't reach the folder check through Admin2's /data/resolve.
 $main = (string) file_get_contents(__DIR__ . '/../gdrive-backup.php');
 check(preg_match('/addAllowedDynamicCallable\([^;]*folderCheck/', $main) === 0 && preg_match('/addAllowedDynamicCallable\([^;]*folderHelp/', $main) === 1, 'folderCheck is not on the dynamic-callable allowlist; folderHelp is');
+check(preg_match("/'onAdminSave' => \\['onAdminSave'/", $main) === 1 && str_contains($main, 'Sync::guardTarget(') && !str_contains($main, '->authorize('), 'onAdminSave is subscribed statically, guards the target, and never asks User::authorize()');
 
 // --- Does a backup profile's zip hold user/data/gdrive/auth? Grav's matching: relative to the root, prefix, slashes trimmed.
 $grav = "/backup\r\n/cache\r\n/images\r\n/logs\r\n/tmp";

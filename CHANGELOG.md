@@ -3,6 +3,8 @@
 
 1. [](#improved)
     * Follows Google Drive Auth 0.1.15, which keeps its credentials in `user/data/gdrive/auth/`: the sign-in warning and the README now say to exclude `/user/data/gdrive/auth` (an existing `/user/data/gdrive` exclusion still covers it). Requires gdrive-auth 0.1.15+.
+2. [](#bugfix)
+    * Security: only an admin with `api.gdrive.manage` (or `api.super`) can change **Google Drive account** and **Drive folder**. Before, anyone with `api.config.write` could point the site's Google credential at a folder they control and receive every backup zip, Google keys and password hashes included. A settings save by anyone else now keeps the saved values (the fields' help says so).
 
 # v0.1.13
 ## 2026-09-29

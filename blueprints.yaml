@@ -49,7 +49,7 @@ form:
     account:
       type: select
       label: Google Drive account
-      help: Set up accounts on the Google Drive Auth plugin's settings page.
+      help: Set up accounts on the Google Drive Auth plugin's settings page. Changing it needs the Manage Google Drive accounts permission (api.gdrive.manage).
       data-options@: '\Grav\Plugin\Gdrive\Setup::accountOptions'
       default: personal
 
@@ -63,7 +63,7 @@ form:
       type: gdrive-folder
       label: Drive folder (link or ID)
       data-help@: '\Grav\Plugin\GdriveBackup\Status::folderHelp'
-      help: "Empty: the plugin creates its own folder, named \"Grav backups\" plus this site's host name in brackets, for example \"Grav backups (example.com)\", in the account's My Drive (OAuth accounts only; needs just drive.file). Set: paste the folder's link from Drive's address bar or its Share dialog, or just its ID; this needs full Drive access. Service accounts have no My Drive, so they must use a folder in a Shared Drive, shared with the service account as Content Manager."
+      help: "Empty: the plugin creates its own folder, named \"Grav backups\" plus this site's host name in brackets, for example \"Grav backups (example.com)\", in the account's My Drive (OAuth accounts only; needs just drive.file). Set: paste the folder's link from Drive's address bar or its Share dialog, or just its ID; this needs full Drive access. Service accounts have no My Drive, so they must use a folder in a Shared Drive, shared with the service account as Content Manager. Changing it needs the Manage Google Drive accounts permission (api.gdrive.manage)."
       placeholder: https://drive.google.com/drive/folders/1AbCdEf…
 
     folder_check:

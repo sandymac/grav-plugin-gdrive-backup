@@ -36,6 +36,12 @@ decisions in §1 are settled.
 - `Event` array access returns copies: append with
   `$e['declarations'] = [...$e['declarations'], $decl];`.
 - Local retention is Grav's `backups.yaml` purge; don't duplicate it.
+- **`account` and `folder` belong to `api.gdrive.manage`**: `onAdminSave` puts
+  back a change by anyone else (`Sync::guardTarget`, `canManageGdrive()` reads
+  `$grav['admin']->user`, never `User::authorize()`, which is false for the api
+  plugin's JWT users). A plain `api.config.write` holder could otherwise aim
+  the site's Google credential at a folder they control and receive every
+  backup zip.
 
 ## Conventions
 

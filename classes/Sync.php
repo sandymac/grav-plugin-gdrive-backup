@@ -154,6 +154,25 @@ final class Sync
     }
 
     /**
+     * What a settings save must put back: `account` and `folder` as saved on
+     * disk when they changed and the saver isn't a Google Drive manager (see
+     * GdriveBackupPlugin::onAdminSave). Pure.
+     *
+     * @return array<string, string> key => value to restore; [] when nothing to undo
+     */
+    public static function guardTarget(array $incoming, array $saved, bool $manager): array
+    {
+        $undo = [];
+        foreach (['account', 'folder'] as $key) {
+            if (!$manager && (string) ($incoming[$key] ?? '') !== (string) ($saved[$key] ?? '')) {
+                $undo[$key] = (string) ($saved[$key] ?? '');
+            }
+        }
+
+        return $undo;
+    }
+
+    /**
      * The folder memories kept in status.json. An old status (before 0.1.5) had
      * only folder_id, which in blank-setting mode was the plugin's own folder;
      * with a folder set it was the configured one and must not be reused later.
