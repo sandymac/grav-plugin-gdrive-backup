@@ -153,8 +153,24 @@ class GdriveBackupPlugin extends Plugin
         }
     }
 
-    /** One sync pass under the lock. Returns the one-line summary the scheduler logs. */
+    /**
+     * The scheduler job and the after-backup hook. Failure-safe: an unwritable
+     * user/data or lock file must not break the backup that just ran, nor the
+     * scheduler; the summary is what the job logs.
+     */
     public function sync(): string
+    {
+        try {
+            return $this->pass();
+        } catch (\Throwable $e) {
+            $this->grav['log']->error('gdrive-backup: ' . $e->getMessage());
+
+            return 'gdrive-backup: FAILED: ' . $e->getMessage();
+        }
+    }
+
+    /** One sync pass under the lock. Returns the one-line summary the scheduler logs. */
+    private function pass(): string
     {
         $log = $this->grav['log'];
         if (!class_exists(Drive::class)) {
