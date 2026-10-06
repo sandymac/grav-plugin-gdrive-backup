@@ -6,8 +6,30 @@ yearly generations. It's modelled on the Home Assistant add-on
 [hassio-google-drive-backup](https://github.com/sabeechen/hassio-google-drive-backup).
 
 Requires PHP 8.3+, Grav 2.0.23+ and the
-[Google Drive Auth](https://github.com/sandymac/grav-plugin-gdrive-auth) (`gdrive-auth`) library plugin
-(0.1.13+), which holds the Google accounts. No Composer dependencies.
+[Google Drive Auth](https://github.com/sandymac/grav-plugin-gdrive-auth) (`gdrive-auth`)
+library plugin (1.0.0+), which holds the Google accounts, plus the
+[api](https://github.com/getgrav/grav-plugin-api) and
+[admin2](https://github.com/getgrav/grav-plugin-admin2) plugins for the settings
+page. All three are declared as dependencies, so GPM installs them. No Composer
+dependencies. CI checks every change against Grav 2.0.23 with api 1.0.41 and
+Grav 2.2.4 with api 1.0.44.
+
+## Installation
+
+Any of the usual three ways:
+
+- **GPM:** `bin/gpm install gdrive-backup`. GPM installs `gdrive-auth`, `api`
+  and `admin2` with it.
+- **Admin2:** Plugins → Add, search for **Google Drive Backup**.
+- **Manual:** download the zip from the
+  [releases page](https://github.com/sandymac/grav-plugin-gdrive-backup/releases),
+  unzip it into `user/plugins/`, and rename the folder to `gdrive-backup`, so
+  that `user/plugins/gdrive-backup/gdrive-backup.php` exists. Install
+  [Google Drive Auth](https://github.com/sandymac/grav-plugin-gdrive-auth/releases)
+  the same way.
+
+No Composer step: no PHP libraries beyond the curl and openssl extensions, which
+Grav already requires.
 
 ## What it does
 
@@ -41,8 +63,7 @@ plugin only manages Drive.
 
 ## Setup
 
-1. Install and enable **gdrive-auth** and **gdrive-backup** (`user/plugins/gdrive-auth`
-   and `user/plugins/gdrive-backup`).
+1. Install and enable the plugins (above).
 2. On the **Google Drive Auth** plugin's settings page, create an account and
    follow its guide. The guide lists the scope this plugin needs.
 3. On this plugin's page, choose the account and a folder mode:
@@ -104,6 +125,26 @@ it; once it's trashed, gone or empty of backups the plugin forgets it.
    `* * * * * cd /path/to/grav && bin/grav scheduler 1>> /dev/null 2>&1`.
    Without it neither the backups nor the sync job run.
 
+## Configuration
+
+Everything is on the settings page; this is the same in
+`user/config/plugins/gdrive-backup.yaml`, with the defaults:
+
+```yaml
+enabled: true
+account: personal            # a Google Drive Auth account name
+folder: ''                   # empty: the plugin's own "Grav backups (<site>)" folder (drive.file, OAuth only)
+                             # set: a folder link or id (full drive scope; service accounts need a Shared Drive folder)
+recreate_folder: true        # folder trashed or gone: make a new one and keep going; false: stop and report
+keep: 10                     # newest N kept on Drive
+generational: { days: 0, weeks: 0, months: 0, years: 0 }   # kept in addition to the newest N
+sync: { enabled: true, at: '15 * * * *' }                   # the catch-up and retention job
+```
+
+After editing the file by hand, run `bin/grav clearcache`. Changing `account`
+or `folder` needs the **Manage Google Drive accounts** permission
+(`api.gdrive.manage`) when done from the settings page (see below).
+
 ## How retention works
 
 - Every backup is dated by the timestamp in its filename
@@ -147,8 +188,10 @@ Grav install, as with any Grav backup.
 ## Development
 
 ```
-php tests/smoke.php                          # GDRIVE_LIB=path/to/grav-plugin-gdrive-auth, default ../grav-plugin-gdrive-auth
-phpstan analyse --memory-limit=1G           # needs .gravtest/grav-admin and ../grav-plugin-gdrive-auth
+php tests/smoke.php                   # GDRIVE_LIB=path/to/grav-plugin-gdrive-auth, default ../grav-plugin-gdrive-auth
+phpstan analyse --memory-limit=1G    # needs a Grav install at .gravtest/grav-admin (see .github/workflows/ci.yml)
+node --check admin-next/fields/gdrive-folder.js
+yamllint blueprints.yaml gdrive-backup.yaml
 ```
 
 ## License

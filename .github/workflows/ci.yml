@@ -4,6 +4,7 @@ on: [push, pull_request]
 
 env:
   GDRIVE_LIB: lib
+  GDRIVE_LIB_REF: '1.0.0'  # the gdrive-auth floor blueprints.yaml declares
 
 jobs:
   test:
@@ -18,6 +19,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           repository: sandymac/grav-plugin-gdrive-auth
+          ref: ${{ env.GDRIVE_LIB_REF }}
           path: lib
 
       - uses: shivammathur/setup-php@v2
@@ -39,12 +41,19 @@ jobs:
 
   phpstan:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # the floor blueprints.yaml declares, and the current Grav 2 release
+        include:
+          - { grav: '2.0.23', api: '1.0.41' }
+          - { grav: '2.2.4', api: '1.0.44' }
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/checkout@v5
         with:
           repository: sandymac/grav-plugin-gdrive-auth
+          ref: ${{ env.GDRIVE_LIB_REF }}
           path: lib
 
       - uses: shivammathur/setup-php@v2
@@ -53,12 +62,14 @@ jobs:
           tools: phpstan
 
       # phpstan.neon resolves Grav symbols from a real install at
-      # .gravtest/grav-admin and the library from ../grav-plugin-gdrive-auth —
-      # recreate the local dev layout. Vendors are for symbol scanning only,
-      # hence --ignore-platform-reqs.
+      # .gravtest/grav-admin and the library from ../grav-plugin-gdrive-auth:
+      # recreate the local dev layout, plus the api plugin whose controller
+      # base the library's Api.php extends. Vendors are for symbol scanning
+      # only, hence --ignore-platform-reqs.
       - run: |
-          git clone --depth 1 -b 2.0.23 https://github.com/getgrav/grav .gravtest/grav-admin
+          git clone --depth 1 -b ${{ matrix.grav }} https://github.com/getgrav/grav .gravtest/grav-admin
           composer install -q -d .gravtest/grav-admin --no-dev --ignore-platform-reqs
+          git clone --depth 1 -b ${{ matrix.api }} https://github.com/getgrav/grav-plugin-api .gravtest/grav-admin/user/plugins/api
           ln -s "$PWD/$GDRIVE_LIB" ../grav-plugin-gdrive-auth
 
       - run: phpstan analyse --memory-limit=1G

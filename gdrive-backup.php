@@ -22,7 +22,7 @@ use RocketTheme\Toolbox\File\AbstractFile;
  */
 class GdriveBackupPlugin extends Plugin
 {
-    public const VERSION = '0.1.14';
+    public const VERSION = '1.0.0';
     public const JOB = 'gdrive-backup-sync';
 
     private static bool $warnedMissing = false;

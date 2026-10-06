@@ -1,7 +1,7 @@
 name: Google Drive Backup
 slug: gdrive-backup
 type: plugin
-version: 0.1.14
+version: 1.0.0
 description: Uploads Grav backups to Google Drive after they're made and keeps the newest N there, plus optional daily, weekly, monthly and yearly generations. Starred copies are never touched; old ones go to Drive's trash.
 icon: cloud-upload
 author:
@@ -10,6 +10,7 @@ author:
   url: https://sandy.mcarthur.org
 homepage: https://github.com/sandymac/grav-plugin-gdrive-backup
 bugs: https://github.com/sandymac/grav-plugin-gdrive-backup/issues
+docs: https://github.com/sandymac/grav-plugin-gdrive-backup/blob/main/README.md
 keywords: google drive, backup, retention, scheduler
 license: MIT
 compatibility:
@@ -17,7 +18,9 @@ compatibility:
 
 dependencies:
   - { name: grav, version: ">=2.0.23" }
-  - { name: gdrive-auth, version: '>=0.1.15' }
+  - { name: gdrive-auth, version: ">=1.0.0" }
+  - { name: api, version: ">=1.0.41" }
+  - { name: admin2, version: ">=2.1.24" }
 
 form:
   validation: loose
