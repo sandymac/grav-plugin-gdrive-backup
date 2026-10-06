@@ -180,6 +180,9 @@ profile's **Exclude paths** in **Configuration → Backups** (you'll then
 reconnect Google after restoring). The scheduled-profiles line on the settings
 page warns while an active profile includes it. Only an admin with `api.gdrive.manage` (or `api.super`) can change the account or the folder; a settings save by anyone else keeps the saved ones.
 
+See [SECURITY.md](SECURITY.md) for what the plugin promises and how to report
+a problem.
+
 ## Restoring
 
 Download the zip from Drive (it's a normal Grav backup) and unzip it over a
