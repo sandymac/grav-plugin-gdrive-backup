@@ -1,0 +1,28 @@
+name: release-asset
+
+# GPM serves the ZIP attached to a GitHub release when one exists, and only
+# falls back to the full source zipball when none is. Attaching a zip built
+# with git archive ships a lean install (dev files stripped via .gitattributes
+# export-ignore), and the asset's download_count tracks GPM installs, which the
+# zipball doesn't. Zip layout = one top-level slug folder, same as the zipball.
+# Same pattern as grav-plugin-gdrive-auth and grav-plugin-mcp-server.
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  attach-zip:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build and attach GPM zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git archive --format=zip --prefix=gdrive-backup/ -o "gdrive-backup-$TAG.zip" HEAD
+          gh release upload --clobber "$TAG" "gdrive-backup-$TAG.zip"
