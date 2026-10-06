@@ -2,9 +2,9 @@
 
 A Grav CMS plugin (PHP 8.3+, Grav 2.0.23+) that uploads Grav backups to Google
 Drive with HA-add-on-style retention. It depends on the shared library plugin
-Google Drive Auth (`gdrive-auth`, `C:\dev\grav-plugin-gdrive-auth`, `Gdrive::drive()`); read that repo's
-README "Public API" before using anything from it, and don't use anything
-not listed there.
+Google Drive Auth (`gdrive-auth`, the sibling repo `grav-plugin-gdrive-auth`,
+`Gdrive::drive()`); read that repo's README "Public API" before using anything
+from it, and don't use anything not listed there.
 
 The design lives in `PLAN.md` (§5 is this repo; §1–§3 for context). The
 decisions in §1 are settled.
@@ -47,30 +47,32 @@ decisions in §1 are settled.
 
 - Thin and lazy, no Composer dependencies, final classes,
   `declare(strict_types=1)`, terse docblocks that explain why.
-- Pattern library: `C:\dev\grav-plugin-gdrive-images` and the library: spl
-  autoload fallback at `onPluginsInitialized` 100000, bare-PHP
-  `tests/smoke.php` with `check()`, PHPStan level 6, and a `VERSION` constant
-  that smoke asserts matches `blueprints.yaml`.
+- Pattern library: the sibling repos `grav-plugin-gdrive-images` and
+  `grav-plugin-gdrive-auth`: spl autoload fallback at `onPluginsInitialized`
+  100000, bare-PHP `tests/smoke.php` with `check()`, PHPStan level 6, and a
+  `VERSION` constant that smoke asserts matches `blueprints.yaml`.
 - Tests use the library's real `Drive` over a fake transport
   (`callable(string $method, string $url, array $opts): array{int, string, array}`).
 
 ## Tooling
 
-No local PHP. Run it via Docker from Git Bash, mounting `C:\dev` so the
-library at `../grav-plugin-gdrive-auth` resolves (not at `/dev`, which would hide
-the container's own `/dev`):
+`php tests/smoke.php` (`GDRIVE_LIB` points at a gdrive-auth checkout; default
+`../grav-plugin-gdrive-auth`), `phpstan analyse --memory-limit=1G` (needs the
+`.gravtest/grav-admin` layout that `.github/workflows/ci.yml` builds),
+`node --check admin-next/fields/*.js` and `yamllint blueprints.yaml gdrive-backup.yaml`.
+Without a local PHP, Docker works; from Git Bash on Windows, mount the parent
+directory so the library checkout next to this repo resolves (not at `/dev`,
+which would hide the container's own `/dev`):
 
 ```
-MSYS_NO_PATHCONV=1 docker run --rm -v "C:/dev:/work" -w /work/grav-plugin-gdrive-backup php:8.3-cli php tests/smoke.php
-MSYS_NO_PATHCONV=1 docker run --rm -v "C:/dev:/work" -w /work/grav-plugin-gdrive-backup php:8.3-cli php .gravtest/phpstan.phar analyse --memory-limit=1G
-yamllint blueprints.yaml gdrive-backup.yaml
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(dirname "$(pwd -W)"):/work" -w /work/grav-plugin-gdrive-backup php:8.3-cli php tests/smoke.php
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(dirname "$(pwd -W)"):/work" -w /work/grav-plugin-gdrive-backup php:8.3-cli php .gravtest/phpstan.phar analyse --memory-limit=1G
 ```
 
 Without `MSYS_NO_PATHCONV=1` MSYS rewrites the `-v` colon, docker mounts
 nothing, and a stray `<dir>;C` directory appears next to the repo.
 
-CI checks the private library out into `lib` with the `GDRIVE_LIB_TOKEN`
-secret (a fine-grained PAT with read access) and sets `GDRIVE_LIB=lib`.
+CI checks the library out into `lib` and sets `GDRIVE_LIB=lib`.
 
 On a deployed site PHP class changes take effect immediately; **YAML config
 changes need `bin/grav clearcache`** (`clearcache`, not `clear-cache`).

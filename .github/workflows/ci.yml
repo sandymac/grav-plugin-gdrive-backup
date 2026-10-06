@@ -14,13 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # The gdrive library is a private repo. GDRIVE_LIB_TOKEN is a fine-grained
-      # PAT with read access (Contents: read) to sandymac/grav-plugin-gdrive-auth only.
+      # The library this plugin builds on, next to it as in the local dev layout.
       - uses: actions/checkout@v5
         with:
           repository: sandymac/grav-plugin-gdrive-auth
           path: lib
-          token: ${{ secrets.GDRIVE_LIB_TOKEN }}
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -44,12 +42,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # See the test job: fine-grained PAT, read access to the library only.
       - uses: actions/checkout@v5
         with:
           repository: sandymac/grav-plugin-gdrive-auth
           path: lib
-          token: ${{ secrets.GDRIVE_LIB_TOKEN }}
 
       - uses: shivammathur/setup-php@v2
         with:

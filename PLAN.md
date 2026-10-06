@@ -1,20 +1,21 @@
-# Plan: grav-plugin-gdrive-backup
+# Design: grav-plugin-gdrive-backup
 
 This repo is **grav-plugin-gdrive-backup**. Its own section is **§5**; the rest is family context.
 
-Status: **planning only, nothing executed.** Written 2026-09-28. Execution waits
-for the owner's explicit go-ahead. The same plan is copied into all three repos;
-only the header above differs.
+Written 2026-09-28, before any code, when the library was still slugged `gdrive`
+(renamed `gdrive-auth` in its 0.1.13, which is why file and config names below
+still say `gdrive`). Where this document and the code differ, the code, README
+and CHANGELOG win. The same plan was shared by all three repos.
 
 ## 0. The family
 
-| Repo (sibling folders in `C:\dev`) | Slug | Namespace | Role |
+| Repo | Slug | Namespace | Role |
 |---|---|---|---|
 | `grav-plugin-gdrive` | `gdrive` | `Grav\Plugin\Gdrive` | Shared library: Google auth, Drive client, account management page and setup guides. No routes except the OAuth callback. |
 | `grav-plugin-gdrive-images` | `gdrive-images` | `Grav\Plugin\GdriveImages` | Today's gallery code: `/gdrive` proxy, known-ids authz, watermark, disk cache, Twig `gdrive_gallery()`. |
 | `grav-plugin-gdrive-backup` | `gdrive-backup` | `Grav\Plugin\GdriveBackup` | Uploads Grav backups to Drive after they're made, with automatic retention, like [sabeechen/hassio-google-drive-backup](https://github.com/sabeechen/hassio-google-drive-backup). |
 
-All three repos are private under `github.com/sandymac`. They need PHP 8.3+ and Grav 2.0.23+ and use no Composer dependencies. The conventions come from `grav-plugin-mcp-server`: an spl autoload fallback, a bare-PHP `tests/smoke.php`, PHPStan level 6 against `.gravtest/grav-admin`, yamllint, GitHub Actions CI, and the `VERSION` constant matching `blueprints.yaml`.
+The three repos live under `github.com/sandymac`. They need PHP 8.3+ and Grav 2.0.23+ and use no Composer dependencies. The conventions come from `grav-plugin-mcp-server`: an spl autoload fallback, a bare-PHP `tests/smoke.php`, PHPStan level 6 against `.gravtest/grav-admin`, yamllint, GitHub Actions CI, and the `VERSION` constant matching `blueprints.yaml`.
 
 ## 1. Decisions (settled; don't reopen)
 
@@ -35,15 +36,11 @@ All three repos are private under `github.com/sandymac`. They need PHP 8.3+ and 
 - **Google's scope categories.** `drive.file` is non-sensitive: no verification is needed, but the app only sees files it created. `drive.readonly` and `drive` are restricted: an unverified personal app gets a warning screen and a 100-user cap, which is fine for bring-your-own clients.
 - **The 7-day trap.** For an External OAuth client left in "Testing" status, Google makes refresh tokens expire after **7 days**. The guide must say to publish the client to "In production", or to make it "Internal" on Workspace. Separately, Google may also expire a refresh token after about 6 months without use.
 - **Service-account key creation may be blocked.** Workspace organisations created since 2024 block it by default (`iam.disableServiceAccountKeyCreation`).
-- **Admin2 is the only admin on Grav 2.** sandy.mcarthur.org runs admin2 2.1.24 and api 1.0.41, with no classic admin. Admin2 fires no `onAdmin*` events, and everything goes through the API plugin (`api.*` permissions). Extension points:
-  - `display` fields with `markdown: true` and `data-content@: '\Class::method'` show Markdown generated in PHP. The mcp-server plugin uses this on the live site.
+- **Admin2 is the only admin on Grav 2** (developed against admin2 2.1.24 and api 1.0.41; there is no classic admin). Admin2 fires no `onAdmin*` events, and everything goes through the API plugin (`api.*` permissions). Extension points:
+  - `display` fields with `markdown: true` and `data-content@: '\Class::method'` show Markdown generated in PHP. The mcp-server plugin uses this.
   - Custom field types are Custom Elements that a plugin ships at `admin-next/fields/<type>.js`. They're discovered through `GET /custom-fields`, so any plugin's blueprint can use them. The API plugin's own `admin-next/fields/users.js` is a working example.
   - Plugin API endpoints are registered through `onApiRegisterRoutes`.
 - **Admin2 signs in with an in-memory bearer token, not a cookie.** So when Google sends the browser back after OAuth sign-in, the request carries **no** admin login. The callback must trust a single-use `state` created on the server, not a session.
-- **Live site (as of 2026-09-28):**
-  - The backup profile's schedule is **off**, and there's one 22 MB backup from 2026-08-17.
-  - Scheduler jobs show `overdue`, with last runs on Sep 5 and Sep 19, so **cron appears not to be firing**.
-  - `gdrive-sweep` is missing from the scheduler's job list. That needs looking into.
 
 ## 3. `grav-plugin-gdrive`: the shared library
 
@@ -260,50 +257,7 @@ The `onGdriveScopes` declaration follows `folder`: `drive.file` when it's empty,
 |---|---|
 | Restore from Drive | You want it; downloading from Drive by hand works meanwhile |
 | A dashboard | You want sync state without opening the settings page or logs |
-| Failure email | You're relying on backups (the Email plugin is already installed on the site) |
+| Failure email | You're relying on backups |
 | Resuming an interrupted upload on the next run | See the `ponytail:` note in 3.4 |
 | Several sites sharing one folder | You back up more than one site to the same folder (the `site` tag is already written, so it's a small change) |
 
-## 6. Execution order (each step starts only on the owner's go-ahead)
-
-1. **Move and rename repos.**
-   1. `gh repo rename grav-plugin-gdrive-images -R sandymac/grav-plugin-gdrive`.
-   2. `git clone C:\dev\grav-plugin-gdrive C:\dev\grav-plugin-gdrive-images`, then set `origin` to the new GitHub URL.
-   3. Copy the untracked `CLAUDE.local.md`, `.gravtest/` and `.claude/`. **Don't** copy `C:\dev\grav-plugin-gdrive\PLAN.md`; it's the library's plan (gdrive-images has its own).
-   4. Check the clone matches: `git status`, the log, and a smoke test run.
-   5. Clear `C:\dev\grav-plugin-gdrive` except `PLAN.md`, `CLAUDE.local.md` and `.gravtest/`. Run `git init` and create the private `sandymac/grav-plugin-gdrive`.
-   6. Run `git init` in `C:\dev\grav-plugin-gdrive-backup` and create its private repo.
-2. **Admin2 prototype.** Build a minimal `admin-next/fields/gdrive-accounts.js` to confirm what data a custom field receives and how it saves. Also check how markdown tables look on a phone.
-3. **Library core:** `Credentials`, `ServiceAccount`, `Http`, `Drive`, `Accounts` and the smoke test. Then gdrive-images uses it, and its smoke test and PHPStan pass.
-4. **OAuth:** `OAuthUser`, the endpoints, the callback, the state store and revoke.
-5. **Settings page:** the guides, `Setup` renderers, the components and the Troubleshooting mapping.
-6. **gdrive-backup**, including retention and its smoke tests.
-7. **Switch over sandy.mcarthur.org** (section 7).
-
-Model tiers (from the global CLAUDE.md):
-- **Top model:** steps 1 and 7, plus the OAuth security design and review.
-- **Opus:** steps 3, 4 and 6 (protocol and auth work).
-- **Sonnet:** the gdrive-images refactor and the Admin2 components, which follow an established pattern.
-- **Haiku:** docs, CHANGELOGs and CLAUDE.md edits.
-
-## 7. Switching over sandy.mcarthur.org
-
-1. Check that `user/data/gdrive/*.json` returns **403** over HTTP (Apache `.htaccess`). Fix it before any credential is renamed or uploaded.
-2. Deploy `gdrive` and `gdrive-images` using the `git archive | ssh` pattern in CLAUDE.local.md.
-3. Rename `user/data/gdrive/service-account.json` to `site.sa.json`.
-4. Split `user/config/plugins/gdrive.yaml`:
-   - `gdrive.yaml` gets `accounts: {site: {type: service_account}}`;
-   - `gdrive-images.yaml` gets the rest, plus `account: site`.
-5. Run `bin/grav clearcache`, then check `/photos` and a cached image URL (both 200, with the same ETag).
-6. Get cron firing again, then enable the backup profile's schedule.
-7. **Backups**, either way:
-   - **OAuth:** set up the `personal` account through the guide. This also tests the guide.
-   - **Service account:** create a folder in a Shared Drive and share it as Content Manager.
-8. Deploy gdrive-backup, run one backup by hand, and check that the upload, the md5 check and retention all work.
-
-## 8. Still open
-
-- Why `gdrive-sweep` is missing from the scheduler's job list.
-- Whether the host's `.htaccess` blocks `.json` under `user/data`.
-- The Admin2 custom-field contract (step 2).
-- Whether picking a folder with Google Picker grants `drive.file` access to its contents. This only matters if gdrive-images should ever work without `drive.readonly`.
